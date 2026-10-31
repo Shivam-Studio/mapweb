@@ -1,0 +1,13 @@
+[project]
+name = "mapmotion-studio"
+version = "0.8.1"
+description = "SVG map editor and animator export workspace"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "fastapi==0.115.12",
+  "uvicorn[standard]==0.34.2",
+  "python-multipart==0.0.20",
+]
+
+[tool.vercel]
+entrypoint = "backend.app:app"

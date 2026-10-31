@@ -1,118 +1,96 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
+title MapMotion Studio - Safe GitHub Publisher
 
-echo.
-echo ================================================
-echo   MapMotion Studio - GitHub V1 Publisher
-echo ================================================
+set "EXPECTED_HTTPS=https://github.com/Shivam-Studio/mapweb.git"
+set "EXPECTED_HTTPS_NOGIT=https://github.com/Shivam-Studio/mapweb"
+set "EXPECTED_SSH=git@github.com:Shivam-Studio/mapweb.git"
+set "ORIGIN_URL="
+
+echo ==============================================================
+echo   MAPMOTION STUDIO 0.8.1 - SAFE GITHUB PUSH
+echo   Target: Shivam-Studio/mapweb
+echo ==============================================================
 echo.
 
 where git >nul 2>nul
 if errorlevel 1 (
-  echo ERROR: Git is not installed or not on PATH.
-  echo Install Git for Windows: https://git-scm.com/download/win
-  pause
-  exit /b 1
-)
-where gh >nul 2>nul
-if errorlevel 1 (
-  echo ERROR: GitHub CLI is not installed or not on PATH.
-  echo Install GitHub CLI: https://cli.github.com/
+  echo ERROR: Git for Windows is not installed or not on PATH.
+  echo Install it from https://git-scm.com/download/win
   pause
   exit /b 1
 )
 
-gh auth status >nul 2>nul
-if errorlevel 1 (
-  echo GitHub CLI is not signed in.
-  echo Starting GitHub login...
-  gh auth login
+if not exist ".git" (
+  echo Initializing Git in this extracted project folder...
+  git init
   if errorlevel 1 goto :failed
 )
 
-rem Set a local commit identity from the authenticated GitHub account when missing.
-for /f "usebackq delims=" %%i in (`gh api user --jq .login`) do set "GH_LOGIN=%%i"
-for /f "usebackq delims=" %%i in (`gh api user --jq .id`) do set "GH_ID=%%i"
-if not defined GH_LOGIN goto :failed
-for /f "usebackq delims=" %%i in (`git config user.name`) do set "GIT_NAME=%%i"
-if not defined GIT_NAME git config user.name "%GH_LOGIN%"
-for /f "usebackq delims=" %%i in (`git config user.email`) do set "GIT_EMAIL=%%i"
-if not defined GIT_EMAIL git config user.email "%GH_ID%+%GH_LOGIN%@users.noreply.github.com"
-
-echo.
-echo A NEW repository will be created under %GH_LOGIN%.
-echo Private is the safe default. Public release needs map-asset redistribution rights.
-echo.
-set "REPO_NAME=MapMotion-Studio-V1"
-set /p "REPO_NAME=New repository name [MapMotion-Studio-V1]: "
-if not defined REPO_NAME set "REPO_NAME=MapMotion-Studio-V1"
-set "VISIBILITY=private"
-set /p "VISIBILITY=Visibility - private or public [private]: "
-if not defined VISIBILITY set "VISIBILITY=private"
-if /i not "%VISIBILITY%"=="private" if /i not "%VISIBILITY%"=="public" (
-  echo ERROR: Enter private or public.
-  pause
-  exit /b 1
-)
-
-echo.
-echo Checking release contents...
-if exist "database.sqlite3" (
-  echo ERROR: database.sqlite3 is present. Remove it before publishing.
-  echo It can contain private project data.
-  pause
-  exit /b 1
-)
-if exist ".env" (
-  echo ERROR: .env is present. Remove secrets before publishing.
-  pause
-  exit /b 1
-)
-
-if not exist ".git" git init -b main
+git branch -M main
 if errorlevel 1 goto :failed
 
-git add .
-if errorlevel 1 goto :failed
-
-git diff --cached --quiet
-if not errorlevel 1 (
-  echo No new changes to commit; checking the existing Git history.
+for /f "delims=" %%U in ('git remote get-url origin 2^>nul') do set "ORIGIN_URL=%%U"
+if not defined ORIGIN_URL (
+  echo Adding the expected GitHub remote...
+  git remote add origin "%EXPECTED_HTTPS%"
+  if errorlevel 1 goto :failed
 ) else (
-  git commit -m "MapMotion Studio 0.8.0 - Animator Export System V1"
-  if errorlevel 1 goto :failed
-)
-
-if exist ".git\config" (
-  git remote get-url origin >nul 2>nul
-  if not errorlevel 1 (
-    echo ERROR: This folder already has an origin remote.
-    echo Refusing to push to an existing repository automatically.
-    echo Inspect it with: git remote -v
+  if /I not "%ORIGIN_URL%"=="%EXPECTED_HTTPS%" if /I not "%ORIGIN_URL%"=="%EXPECTED_HTTPS_NOGIT%" if /I not "%ORIGIN_URL%"=="%EXPECTED_SSH%" (
+    echo ERROR: This folder is already connected to a different GitHub repository:
+    echo   %ORIGIN_URL%
+    echo.
+    echo No remote was changed and nothing was pushed.
+    echo Check the repository before changing origin manually.
     pause
-    exit /b 1
+    exit /b 2
   )
 )
 
-echo.
-echo Creating the new %VISIBILITY% GitHub repository and pushing main...
-if /i "%VISIBILITY%"=="public" (
-  gh repo create "%REPO_NAME%" --public --source . --remote origin --push
-) else (
-  gh repo create "%REPO_NAME%" --private --source . --remote origin --push
+for /f "delims=" %%N in ('git config user.name 2^>nul') do set "GIT_NAME=%%N"
+for /f "delims=" %%E in ('git config user.email 2^>nul') do set "GIT_EMAIL=%%E"
+if not defined GIT_NAME (
+  set /p "GIT_NAME=Git commit name [Shivam-Studio]: "
+  if not defined GIT_NAME set "GIT_NAME=Shivam-Studio"
+  git config user.name "!GIT_NAME!"
 )
+if not defined GIT_EMAIL (
+  echo Enter the email you want recorded on Git commits.
+  set /p "GIT_EMAIL=Git commit email: "
+  if not defined GIT_EMAIL (
+    echo ERROR: A commit email is required. Nothing was pushed.
+    pause
+    exit /b 3
+  )
+  git config user.email "!GIT_EMAIL!"
+)
+
+echo.
+echo Staging project files (ignored secrets, databases and local environments stay excluded)...
+git add -A
 if errorlevel 1 goto :failed
+git status --short
+
+git diff --cached --quiet
+if errorlevel 1 (
+  echo.
+  echo Creating update commit...
+  git commit -m "MapMotion Studio 0.8.1 - Vercel deployment setup"
+  if errorlevel 1 goto :failed
+) else (
+  echo.
+  echo No new staged changes. The current commit will be synchronized.
+)
+
+rem Create a local recovery branch before reconciling with the remote main branch.
+git rev-parse --verify HEAD >nul 2>nul
+if not errorlevel 1 (
+  for /f %%T in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd-HHmmss"') do set "STAMP=%%T"
+  if defined STAMP git branch "backup/pre-vercel-sync-!STAMP!" HEAD >nul 2>nul
+)
 
 echo.
-echo SUCCESS. New repository created and main branch pushed.
-gh repo view --web
-pause
-exit /b 0
-
-:failed
-echo.
-echo PUBLISH FAILED. No success is assumed.
-echo Review the error above, then retry after fixing it.
-pause
-exit /b 1
+echo Fetching the existing GitHub main branch...
+git fetch origin
+if errorlevel 1 goto :failed

@@ -1,22 +1,20 @@
 .venv/
 __pycache__/
-*.pyc
-database.sqlite3
-instance/
-*.sqlite3-wal
-*.sqlite3-shm
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.vercel/
 .env
 .env.*
+!.env.example
+*.log
+instance/
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
+# User map assets and user project data are excluded by default.
+# Only upload and commit map packs when redistribution permissions are documented.
 storage/maps/*
 !storage/maps/README.md
 storage/projects/
-.venv/
-__pycache__/
-*.pyc
-node_modules/
-*.log
-database.sqlite3
-storage/maps/README.md

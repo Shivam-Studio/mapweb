@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.1 — Vercel deployment compatibility
+
+- Added the explicit Vercel FastAPI entrypoint (`backend.app:app`) and root dependency manifest.
+- Added a Python 3.12 runtime declaration for Vercel.
+- Redirected Vercel SQLite and upload writes to temporary storage instead of the read-only deployment bundle.
+- Added an in-app warning that Vercel temporary storage is not durable.
+- Added automated Vercel-mode API smoke tests and a safe GitHub push script.
+- Added a conservative 4 MB hosted-preview upload guard for Vercel Functions 4.5 MB request limits.
+- Closed SQLite connections after each request to avoid leaking file handles in serverless instances.
+- Documented temporary persistence, large-file and authentication limitations.
+- Kept map packs excluded from public source until their redistribution rights are confirmed.
+
+
 ## 0.8.0 — Animator Export System
 - Simplified export UI to exactly three primary actions: cropped Country PNG, positioned-country package, and map-only Camera SVG.
 - Added full-camera-frame transparent country PNG exports that align exactly with matching Camera Map SVG exports.
@@ -10,6 +23,19 @@
 - Preserved the standalone tightly-cropped Country PNG workflow.
 
 # Changelog
+
+## 0.8.1 — Vercel deployment compatibility
+
+- Added the explicit Vercel FastAPI entrypoint (`backend.app:app`) and root dependency manifest.
+- Added a Python 3.12 runtime declaration for Vercel.
+- Redirected Vercel SQLite and upload writes to temporary storage instead of the read-only deployment bundle.
+- Added an in-app warning that Vercel temporary storage is not durable.
+- Added automated Vercel-mode API smoke tests and a safe GitHub push script.
+- Added a conservative 4 MB hosted-preview upload guard for Vercel Functions 4.5 MB request limits.
+- Closed SQLite connections after each request to avoid leaking file handles in serverless instances.
+- Documented temporary persistence, large-file and authentication limitations.
+- Kept map packs excluded from public source until their redistribution rights are confirmed.
+
 
 ## 0.7.5 — Simplified export workflows
 

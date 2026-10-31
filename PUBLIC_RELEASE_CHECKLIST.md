@@ -1,11 +1,17 @@
-# Public GitHub Release Checklist
+# Public release checklist — MapMotion Studio 0.8.1
 
-Before publishing the bundled map data to a public repository or live website:
-
-- [ ] Confirm redistribution rights for the user-supplied `worldIndiaHigh` source SVG. Its metadata currently says to confirm redistribution rights.
-- [ ] Review the ESRI-derived world map asset. Its current metadata says the license is not specified and admin review is required. Do not publish this asset publicly until its source/license is confirmed.
-- [ ] Confirm the generated illustrative physical texture may be redistributed with the source boundary data.
-- [ ] Choose a repository license for the application code. No license has been invented or added by this build.
-- [ ] Decide whether map assets should be committed to GitHub or delivered separately as release assets if licensing/size requires it.
-- [ ] Set up repository secrets only if future CI or deployment needs them; this MVP currently runs locally.
-- [ ] Test clean installation on Windows after the local database backup/migration.
+- [ ] Confirm the GitHub repository is `Shivam-Studio/mapweb`.
+- [ ] Review map-data and satellite-imagery redistribution licences before adding any map pack.
+- [ ] Ensure no `.env`, token, credential, SQLite database, local project data or private map is staged.
+- [ ] Run `node --check frontend/app.js`.
+- [ ] Run `python -m py_compile backend/app.py`.
+- [ ] Run `node QA_CAMERA_TEST.js`.
+- [ ] Run `python qa_vercel_smoke.py` after installing `requirements-dev.txt`.
+- [ ] Push using `PUSH_TO_GITHUB.bat`; do not force-push.
+- [ ] Connect Vercel to `Shivam-Studio/mapweb`, not the previously shown `stephinhenry91-design/mapweb` source.
+- [ ] Set the Vercel Root Directory to `./`.
+- [ ] Enable Vercel Deployment Protection for preview URLs; add application authentication and per-user authorization before public production.
+- [ ] Check `/api/health` and confirm the app warns about temporary storage.
+- [ ] Before production, provision persistent PostgreSQL and object storage and migrate uploads/projects away from `/tmp`.
+- [ ] Use direct-to-object-storage uploads for SVG/raster assets larger than Vercel Functions 4.5 MB request/response limit.
+- [ ] Test current camera, country PNG and positioned-country ZIP exports in the actual deployed browser.

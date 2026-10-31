@@ -1,4 +1,4 @@
-// Dependency-free camera framing regression tests for MVP 0.8.0.
+// Dependency-free camera framing regression tests for MVP 0.8.1.
 const fs = require('fs');
 const source = fs.readFileSync(__dirname + '/frontend/app.js', 'utf8');
 const match = source.match(/function cameraViewBoxFromState\([\s\S]*?\n}\nfunction editorCameraViewBox/);

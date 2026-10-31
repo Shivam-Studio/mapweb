@@ -1,129 +1,77 @@
-# MapMotion Studio — MVP 0.8.0 (Animator Export System)
+# MapMotion Studio 0.8.1 — Vercel deployment-ready source
 
-A local Windows-first map editor for editing SVG map geometry, camera framing and transparent country assets. Built with FastAPI, SQLite and a browser-based SVG editor.
+MapMotion Studio is a browser-based SVG map editor for map-animation creators. It provides country/region selection, world and continent camera framing, map styling, optional physical-terrain SVG layers when supplied by a map, manual raster pairing, saved projects, and three animator-focused export actions.
 
-## Start on Windows
+This release adds a Vercel FastAPI entrypoint and a temporary-storage compatibility mode. **It is not yet a durable multi-user cloud workspace** because persistent database and object-storage services have not been connected.
 
-This update ZIP intentionally excludes `database.sqlite3`. That prevents Windows Explorer from trying to overwrite a SQLite database while the running app has it open. On Windows, projects are stored at `%LOCALAPPDATA%\MapMotionStudio\database.sqlite3`. A legacy project-root database is migrated once with SQLite's online backup API; the old source file is left untouched.
+## Quick start — Windows local app
 
-Before updating an existing installation:
+1. Install Python 3.10+ and enable **Add Python to PATH**.
+2. Double-click `run_windows.bat`.
+3. Open <http://127.0.0.1:8000> if the browser does not open automatically.
+4. Open **Map Library → Upload map** and upload an SVG boundary file you own or are licensed to use.
+5. Open the map in the editor and choose a world/continent camera.
 
-1. In the old MapMotion Studio terminal, press **Ctrl+C** and wait for the server to stop.
-2. Keep your existing `MapMotionStudio` folder and its `storage` folder. Do not delete the legacy project-root `database.sqlite3` before migration.
-3. Extract this ZIP into the **same `MapMotionStudio` folder**, allowing code and frontend files to update. The archive contains no live database file, so it cannot overwrite a locked SQLite database.
-4. Start `run_windows.bat`. On first launch, the old project-root database is copied to `%LOCALAPPDATA%\MapMotionStudio\database.sqlite3`; the original is left in place until you confirm your projects are present.
+The launcher creates `.venv`, installs `backend/requirements.txt`, and starts FastAPI on port 8000. On Windows, the SQLite database remains under `%LOCALAPPDATA%\MapMotionStudio\database.sqlite3`; uploaded map assets remain in `storage/maps/`.
 
-For a fresh install, extract into a new folder. The database is created automatically and bundled maps are registered on first launch.
+## The three animator exports
 
-1. Install Python 3.10 or newer and enable **Add Python to PATH**.
-2. Open the extracted `MapMotionStudio` folder.
-3. Double-click `run_windows.bat`.
-4. Open `http://127.0.0.1:8000` if the browser does not open automatically.
-5. Keep the black terminal window open while using the app.
+1. **Camera Map SVG** — exports only the visible camera frame (world/continent/custom view, current pan/zoom and map style), without a selected-country highlight.
+2. **Country PNG** — exports one selected country as a tightly cropped transparent PNG.
+3. **Country + exact map position** — downloads a ZIP containing a full-camera-frame transparent PNG, `placement.json`, and import instructions. The positioned PNG uses the same pixel dimensions and camera viewBox as the Camera Map SVG, so it can be centered at 100% scale over the matching map.
 
-The launcher creates `.venv` once, installs pinned dependencies, and refuses to start if port 8000 is already occupied. Stop the older process with `Ctrl+C` before restarting.
+Export the camera map and positioned country from the same source map and unchanged camera session. The position metadata guarantees alignment in the matching SVG frame; it does not claim accurate latitude/longitude unless the input SVG is independently georeferenced.
 
-## Publish V1 to GitHub
+## Push to GitHub
 
-Run `publish_to_github.bat` to create a new GitHub repository and push the V1 source. The script defaults to a private repository and requires Git for Windows plus GitHub CLI. See [GITHUB_PUBLISH.md](GITHUB_PUBLISH.md) before publishing.
+1. Extract this ZIP into your MapMotion Studio project folder.
+2. Install Git for Windows: <https://git-scm.com/download/win>.
+3. Double-click `PUSH_TO_GITHUB.bat`.
+4. Enter your Git commit email if asked and complete Git Credential Manager sign-in.
 
-## Recommended workflow
+The BAT targets <https://github.com/Shivam-Studio/mapweb>. It refuses to replace a different `origin`, creates a local recovery branch before remote synchronization, fetches/merges the existing `main` branch and never force-pushes. See [`PUSH_TO_GITHUB.md`](PUSH_TO_GITHUB.md).
 
-1. Open **Map Library** and choose a bundled map or upload your SVG.
-2. Open **Map Editor** and choose World, India or a continent camera.
-3. Search/click a country; use Single or Multiple selection as needed.
-4. Set the map style and layers, and pan/zoom the camera.
-5. Use one of the three animator exports below.
-6. Save the project before leaving the editor.
+## Deploy to Vercel
 
-## The three export actions
+Read [`VERCEL_DEPLOYMENT.md`](VERCEL_DEPLOYMENT.md) before importing the repository.
 
-The export panel follows the animator sequence: download the camera map base first, then a tight country cutout, then the country packaged at its exact camera position.
+The Vercel entrypoint is configured in the root `pyproject.toml`:
 
-### 1. Country PNG
+```toml
+[tool.vercel]
+entrypoint = "backend.app:app"
+```
 
-- Requires **exactly one selected country/region**.
-- The preview and downloaded PNG show only that selected feature, tightly cropped to its actual vector bounds.
-- Outside the feature is transparent by default; a solid background can be selected by turning off transparency.
-- Uses the current map appearance: Political/Blank styling or the bundled physical relief when the Physical terrain style is active and available for the selected map.
-- Supports preset or custom pixel dimensions up to 8192 px per side, subject to the browser's memory and maximum export-area safety limit.
-- If zero or multiple regions are selected, the export is blocked with a clear message rather than exporting an unintended region.
+The root `requirements.txt` lists the runtime dependencies. `.python-version` selects Python 3.12. Set the Vercel Root Directory to the repository root (`./`).
 
-### 2. Country + exact map position (ZIP package)
+**Important repository check:** the previously shared Vercel deployment page showed `stephinhenry91-design/mapweb`, while the MapMotion Studio repository reviewed for this package is `Shivam-Studio/mapweb`. Connect the correct repository in Vercel → Project Settings → Git, otherwise this package's pushes will not trigger that deployment.
 
-- Requires exactly one selected country/region.
-- Downloads a ZIP containing a transparent `country-at-camera-position.png`, `placement.json`, and `IMPORT-INSTRUCTIONS.txt`.
-- The PNG has the **same width, height and camera viewBox** as the Camera Map SVG export. It contains only the selected country, placed at its exact location in that camera frame; all other pixels remain transparent.
-- The JSON sidecar records map ID/name and source SVG fingerprint, source map viewBox, camera viewBox, active world/continent/custom view, pan/zoom, output pixel dimensions, source-coordinate country bounds, visible pixel bounds, normalized coordinates, and an import placement recommendation.
-- To align it, export the Camera Map SVG from the same source map and unchanged camera session, convert it to PNG if needed while preserving its width/height, then import the positioned PNG over it at canvas center, 100% scale, 0° rotation. Do not independently crop or resize either file.
-- If the selected country is outside the current camera frame, the positioned export is blocked with a clear message. When a country is only partly visible, the package records the visible bounds and notes that it is clipped by the camera.
+## Vercel storage limitation — preview mode only
 
-### 3. Camera Map SVG
+Vercel's deployment bundle is read-only. In Vercel mode, this app routes SQLite and upload writes into `/tmp/MapMotionStudio` to avoid write failures. Vercel's `/tmp` is temporary; uploaded maps, satellite images and saved projects are **not guaranteed to survive restarts or be visible to other function instances**.
 
-- Exports only the map currently visible inside the editor camera: active world/continent/custom view, current pan and zoom, and current map style/layers.
-- The map preview and export contain no selected-country highlight, no selection isolation dimming and no country-only cutout.
-- The output's width and height are the same as the positioned-country PNG package generated from that camera state and shared output preset.
-- The shared 4K/8K long-edge preset preserves the camera aspect ratio. For safe browser raster memory, the output may automatically scale down to remain within a 32-megapixel frame; the actual exported dimensions are shown in the editor. The Camera Map SVG remains vector.
+Before production use, integrate a persistent PostgreSQL database and object storage, configure their credentials as Vercel Environment Variables, and migrate the current SQLite schema and map asset workflow. Also enable Vercel Deployment Protection for previews; the MVP does not yet include user authentication or per-user data isolation. This ZIP does not create external accounts or pretend temporary storage is persistent. The app displays a temporary-storage warning when it detects Vercel mode.
 
-### Convert Camera SVG to HD PNG with CloudConvert
+## Map assets and licences
 
-The Camera Map card includes a text link to [CloudConvert SVG to PNG](https://cloudconvert.com/svg-to-png). Download the camera SVG first, open the converter, upload the file manually, choose PNG and preserve the SVG width/height. MapMotion Studio does not automatically upload the map to a third party; you control that upload. See the [CloudConvert SVG converter](https://cloudconvert.com/svg-converter) for its available output settings. 
+The public source package excludes bundled development map packs and satellite imagery because redistribution permission has not been confirmed for every asset. A fresh checkout/deployment therefore starts with an empty Map Library. Upload an SVG you own or are licensed to use. See [`ASSET_LICENSING.md`](ASSET_LICENSING.md) and [`storage/maps/README.md`](storage/maps/README.md).
 
-## What is included
+On Vercel preview mode, uploaded assets use temporary storage. Do not treat those uploads as backups. Vercel Functions also enforce a 4.5 MB request/response body limit; this package conservatively limits hosted-preview uploads to 4 MB total per request. Larger SVG and raster files must go directly to object storage. See [`VERCEL_DEPLOYMENT.md`](VERCEL_DEPLOYMENT.md).
 
-- Bundled ESRI world map with country/territory vector features, World Map — India View and World Physical Map — India View.
-- SVG feature selection and search, Single/Multiple selection, zoom-to-selection, isolate selection, pointer-anchored zoom, panning and continent framing (North America, South America, Europe, Africa, Asia and Oceania). Antarctica is raster-only where the supplied SVG has no AQ vector boundary.
-- Political, blank and physical display styles where the selected map provides the corresponding asset.
-- Independent visibility controls for physical terrain and country boundaries.
-- Optional manual satellite-image pairing with opacity, scale and X/Y alignment. Pair verification is a user confirmation, not an automatic GIS accuracy check.
-- SQLite project save, reopen and delete. On Windows the database is stored in `%LOCALAPPDATA%\MapMotionStudio\database.sqlite3`.
+## Validation commands
 
-## Important limitations
+Install QA dependencies, then run:
 
-- The supplied India-view world SVG uses its own SVG coordinate frame and is **not georeferenced**. The editor can frame vector features, but it cannot derive trustworthy latitude/longitude bounds from this file.
-- Satellite/raster alignment is manual. Confirming a pair records the user's verification; it does not prove geographic alignment.
-- The bundled physical relief is procedurally generated illustrative shaded relief, not measured elevation data. It is not suitable for scientific terrain analysis.
-- Uploaded maps must be SVG. Shapefile, GeoJSON, GeoTIFF and MBTiles are not currently ingested.
-- Country/region selection depends on feature geometry and identifiers present in the uploaded SVG. Missing boundaries are not invented.
-- 8K conversion through a third-party service is subject to that service's file limits, processing limits and account terms. CloudConvert upload is an explicit user action, not an automatic background transfer.
-- This is a local single-user MVP, not a cloud or multi-user deployment.
+```bash
+python -m pip install -r requirements-dev.txt
+node --check frontend/app.js
+python -m py_compile backend/app.py
+node QA_CAMERA_TEST.js
+python qa_vercel_smoke.py
+```
 
-## Validation status — 0.8.0
+The QA smoke test runs the FastAPI app with `VERCEL=1` and checks home/static assets, health, SVG upload, asset download, satellite upload, pair verification, project create/list/delete, unsafe SVG rejection, and that writable data goes to the configured temporary directory. It does not prove durable cloud persistence or a successful remote Vercel deployment.
 
-The following checks were performed against the actual frontend and bundled map assets in an isolated Chromium harness. API calls were mocked for the browser tests; the FastAPI backend was compiled and tested separately.
+## Licence
 
-- `node --check frontend/app.js`: passed.
-- `python -m py_compile backend/app.py`: passed.
-- `QA_CAMERA_TEST.js`: passed.
-- Country-only PNG: 3840 × 2160 test export created; non-empty alpha bounds verified.
-- Positioned-country ZIP: ZIP CRC/integrity passed; contains positioned PNG, `placement.json` and import instructions. The PNG is 3840 × 3478 in the Asia test; the sidecar viewBox and output dimensions match the Camera Map SVG exactly.
-- Pixel placement: actual PNG alpha bounds matched the sidecar's calculated visible camera-frame bounds within 2 pixels.
-- Physical positioned country: tested with embedded relief texture; 10,668 distinct RGB colours in the country pixels confirmed visible terrain rather than outline-only output.
-- Camera Map SVG: same 3840 × 3478 dimensions and same camera viewBox as positioned PNG; no country selection metadata/highlight in the SVG.
-- 8K camera preset: vector SVG export created; for the portrait-like Asia test frame it auto-limited to 6087 × 5512 to stay within the 32 MP safe raster budget.
-- Responsive checks at 320, 360, 375, 390, 430, 600, 760, 768, 850, 1024 and 1440 px: no document horizontal overflow; the three export buttons remained full-width.
-- Browser console/page errors: none in the harness.
-
-The browser harness used the app's actual HTML, CSS, JavaScript and map SVG/physical texture assets, with mocked API responses. The user's exact live Chrome tab and Windows environment were not controlled or tested from this session.
-
-## Storage and backups
-
-- Map assets and metadata: `storage/maps/<map-id>/` inside the project folder.
-- Saved projects/map-library records: `%LOCALAPPDATA%\MapMotionStudio\database.sqlite3` on Windows.
-- Python virtual environment: `.venv/`.
-- The legacy project-root database is not deleted automatically. Keep it until the migrated projects have been confirmed.
-
-Back up both the `storage` folder and `%LOCALAPPDATA%\MapMotionStudio\database.sqlite3`.
-
-
-## MVP 0.8.0 — Animator exports
-
-The editor has exactly three export actions:
-
-1. **Camera Map SVG** — download the current camera/continent view first. It contains map imagery and boundaries only, with country selection highlights and isolation states removed.
-2. **Country PNG** — a tightly cropped transparent PNG of the selected country, for standalone use.
-3. **Country + exact map position** — a ZIP containing a full-camera-frame transparent PNG, `placement.json`, and import instructions. The positioned PNG is the same pixel size and camera frame as the Camera Map export, so it can be centered at 100% scale over the matching map.
-
-The Camera output size selector is shared by Camera Map SVG and positioned-country package exports. Export both from the same source map and camera session. The sidecar records source map ID/hash, viewBox, view preset, pan/zoom, output canvas size, source-coordinate country bounds, visible pixel bounds, and normalized pixel bounds.
-
-The map source is not necessarily georeferenced. Placement metadata guarantees alignment in the matching SVG camera frame, not latitude/longitude accuracy.
+No application licence has been added. Choose an appropriate licence before inviting public contributions or reuse.

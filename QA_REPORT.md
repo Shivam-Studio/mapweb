@@ -1,44 +1,60 @@
-# MapMotion Studio 0.8.0 — QA Report
+# MapMotion Studio 0.8.1 — Final package QA report
 
 ## Scope
-Verified the three-action animator export workflow against the actual frontend source and bundled SVG/physical texture assets using isolated Chromium. Browser API calls were mocked for deterministic frontend tests; FastAPI was tested separately with a temporary SQLite data directory.
 
-## Export checks
+This report covers the Vercel deployment configuration, local source static checks, camera math regression tests, and an automated FastAPI smoke test running in Vercel-style temporary-storage mode. It does not claim that a deployment has been performed on the user's Vercel account.
 
-The editor presents the three animator actions in workflow order: Camera Map SVG first, cropped Country PNG second, and Country + exact map position third. A browser regression assertion verifies this order and that exactly three export buttons are present.
+## Vercel configuration review
 
-| Test | Result | Evidence |
-|---|---|---|
-| Cropped country PNG | PASS | 3840×2160 transparent PNG; non-empty alpha bounds |
-| Positioned country ZIP | PASS | ZIP integrity; includes PNG, `placement.json`, import instructions |
-| Position sidecar | PASS | Map ID/source SVG fingerprint (SHA-256 where Web Crypto is available, stable non-cryptographic FNV-1a fallback otherwise), source viewBox, camera viewBox, pan/zoom, source bounds, visible pixel bounds and normalized bounds included |
-| Pixel placement | PASS | PNG alpha bounds agree with sidecar visible bounds within 2 px |
-| Camera Map SVG | PASS | Same dimensions and exact `viewBox` as positioned PNG; selection/highlight metadata removed; action exports map-only camera frame |
-| Physical positioned export | PASS | Embedded relief clipped to selected geometry; 10,668 distinct RGB colours inside country |
-| 8K camera preset | PASS | SVG rendered; effective frame 6087×5512 (auto-limited to 32 MP) |
-| Responsive layout | PASS | 320, 360, 375, 390, 430, 600, 760, 768, 850, 1024, 1440 px; no horizontal overflow |
-| Browser console/page errors | PASS | None in harness |
+| Check | Expected / result |
+|---|---|
+| `pyproject.toml` custom entrypoint | `backend.app:app` |
+| Root `requirements.txt` | Present; includes FastAPI, Uvicorn and multipart parsing |
+| `.python-version` | Python 3.12 |
+| Vercel data directory | `/tmp/MapMotionStudio` (or `MAPMOTION_DATA_DIR` override) |
+| Local Windows database | Remains under `%LOCALAPPDATA%\MapMotionStudio` |
+| Public bundled map packs | Excluded until redistribution permissions are confirmed |
+| Vercel persistent storage | Not configured; preview mode is explicitly marked ephemeral |
+| Vercel upload/response payloads | 4.5 MB platform ceiling documented; UI uses a conservative 4 MB upload guard |
 
-## Backend checks
+## Automated checks
 
-- `GET /api/health`: 200, reports version 0.8.0.
-- Map library: all 3 bundled map records present.
-- SVG asset routes: all 3 world boundary assets returned successfully.
-- Project create/list/delete round-trip: PASS.
-- SQLite `PRAGMA integrity_check`: `ok`.
+Run the following in the project root:
 
-## Static checks
+- `node --check frontend/app.js`
+- `python -m py_compile backend/app.py`
+- `python -m py_compile qa_vercel_smoke.py`
+- `node QA_CAMERA_TEST.js`
+- `python qa_vercel_smoke.py`
 
-- `node --check frontend/app.js`: PASS.
-- `python -m py_compile backend/app.py`: PASS.
-- `node QA_CAMERA_TEST.js`: PASS.
-- Positioned-package map fingerprint is non-empty and records the algorithm used: PASS.
-- ZIP CRC/integrity and one-root-folder structure: PASS.
-- No database or Python cache files included in release archive.
+The Vercel smoke script verifies:
 
-## Known limitations
+- `/` responds with the MapMotion Studio page.
+- `/assets/app.js` and `/assets/styles.css` are served.
+- `/api/health` reports version 0.8.1, Vercel runtime, ephemeral storage and no persistent storage configured.
+- Empty map library responds cleanly.
+- SVG map upload and asset download work.
+- Satellite upload and manual pair verification work.
+- Project create/list/delete works.
+- Unsafe active SVG content is rejected.
+- SQLite and user uploads use the configured temporary data directory, not the deployment source folder.
 
-1. Exact placement is guaranteed in the matching source-map SVG coordinate frame and exported camera frame. It does not create trustworthy latitude/longitude unless the source map is properly georeferenced.
-2. The base camera SVG and positioned country package must be exported from the same map asset and unchanged camera state. Convert the base SVG to PNG without changing its output pixel dimensions if the target editor requires raster imagery.
-3. Camera frames are automatically scaled down when a raster companion would exceed the 32-megapixel safe canvas limit. Actual dimensions are shown in the editor and included in the sidecar.
-4. Browser tests used isolated Chromium and mocked API responses; the user's Windows Chrome session was not controlled.
+## Browser export regression
+
+The dependency-free `QA_CAMERA_TEST.js` verifies the map-camera framing function for the base frame, 2x zoom, pan offsets and portrait viewport geometry.
+
+The 0.8.0 three-export workflow and browser export harness remain documented in the previous QA history. This package does not re-run the full Chromium 4K/8K image-export matrix in this environment; the included smoke test is focused on Vercel startup and API/storage compatibility.
+
+## Known production blockers
+
+1. The original app is a local single-user MVP and has no application authentication, authorization or per-user data isolation. Protect previews with Vercel Deployment Protection and add application auth before public production.
+2. `/tmp` storage is temporary and cannot be used as durable user storage.
+3. Persistent PostgreSQL and object storage are not provisioned or configured in this package.
+4. Public development map packs and satellite imagery are intentionally not included; the Map Library starts empty unless an administrator adds properly licensed map assets.
+5. Vercel Function requests and responses are limited to 4.5 MB. The UI blocks larger uploads in preview mode; large map assets need direct-to-object-storage upload and CDN delivery.
+6. The Vercel project's connected Git repository must be changed to `Shivam-Studio/mapweb`; the supplied deployment log previously showed `stephinhenry91-design/mapweb`.
+7. The final deployed result must still be verified in the user's Vercel project and browser after pushing.
+
+## QA honesty note
+
+A passing local smoke test confirms the included code paths tested here. The authoring container had preinstalled FastAPI 0.128.2, Starlette 0.50.0 and HTTPX 0.28.1; internet access was unavailable, so the pinned runtime packages in `requirements.txt` could not be freshly downloaded here. Vercel must still resolve the pinned dependencies during its own build. These checks do not confirm Vercel account permissions, the connected Git repository, environment settings, remote build success, or persistent cloud storage.

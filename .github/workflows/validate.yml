@@ -15,9 +15,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install QA dependencies
+        run: python -m pip install -r requirements-dev.txt
       - name: Check JavaScript syntax
         run: node --check frontend/app.js
-      - name: Compile Python backend
-        run: python -m py_compile backend/app.py
+      - name: Compile Python backend and smoke test
+        run: |
+          python -m py_compile backend/app.py
+          python -m py_compile qa_vercel_smoke.py
+          python qa_vercel_smoke.py
       - name: Test camera frame math
         run: node QA_CAMERA_TEST.js
