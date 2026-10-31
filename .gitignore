@@ -18,3 +18,5 @@ __pycache__/
 *.pyc
 node_modules/
 *.log
+database.sqlite3
+storage/maps/README.md
