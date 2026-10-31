@@ -1,0 +1,23 @@
+name: Validate MapMotion Studio
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check JavaScript syntax
+        run: node --check frontend/app.js
+      - name: Compile Python backend
+        run: python -m py_compile backend/app.py
+      - name: Test camera frame math
+        run: node QA_CAMERA_TEST.js
