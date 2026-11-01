@@ -90,7 +90,7 @@ Official references:
 
 1. `/` renders MapMotion Studio 0.8.6 with ten bundled starter maps.
 2. `/api/health` reports `map_storage_mode: "github-lfs"` and `github_lfs.configured: true`.
-3. `/api/maps` returns the nine bundled maps and any records in `storage/maps/user-uploads/catalog.json`.
+3. `/api/maps` returns all ten bundled maps and any records in `storage/maps/user-uploads/catalog.json`.
 4. Upload a small test SVG and confirm GitHub receives a commit under `storage/maps/user-uploads/<map-id>/` plus an updated `catalog.json`.
 5. Upload a satellite image from the Pairing screen and confirm its LFS pointer is committed under the same map ID (or the `_overrides` folder for a bundled map).
 6. Refresh the Vercel page and verify the uploaded map remains listed and its SVG/image can be loaded.
@@ -100,7 +100,7 @@ The included automated QA uses mocked GitHub responses. It does not replace this
 
 ## Starter maps
 
-The application includes nine starter maps: World Map — India View, World Physical Map — India View, Asia, Europe, Africa, North America, South America, Oceania, and India & Neighbours. Boundary data attribution and licensing are documented in `storage/maps/ATTRIBUTION.md`.
+The application includes ten starter maps: World Map — India View, World Satellite Map — India View, World Physical Map — India View, Asia, Europe, Africa, North America, South America, Oceania, and India & Neighbours. Boundary data attribution and licensing are documented in `storage/maps/ATTRIBUTION.md`.
 
 ## 0.8.6 bundled map and export verification
 

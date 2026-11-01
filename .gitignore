@@ -22,6 +22,8 @@ storage/maps/*
 !storage/maps/world-india/**
 !storage/maps/world-physical-india/
 !storage/maps/world-physical-india/**
+!storage/maps/world-satellite-india-view/
+!storage/maps/world-satellite-india-view/**
 !storage/maps/asia/
 !storage/maps/asia/**
 !storage/maps/europe/

@@ -1,0 +1,28 @@
+{
+  "id": "world-satellite-india-view",
+  "name": "World Satellite Map — India View",
+  "category": "World Maps",
+  "map_type": "political",
+  "projection": "User-supplied 2048×2048 source frame; geographic projection metadata not independently verified",
+  "coverage": "Global; India-focused view as supplied",
+  "svg": "world-india.svg",
+  "satellite": null,
+  "thumbnail": "thumbnail.png",
+  "source": "User-supplied World_Satellite_India_View_FIXED(1).svg with embedded satellite raster",
+  "license": "User-supplied assets; redistribution license not specified — verify rights before public redistribution",
+  "pairing_status": "unverified",
+  "path_count": 257,
+  "physical_svg": "physical.svg",
+  "physical_preview": "physical-texture.png",
+  "physical_style": "User-supplied physical raster, 2048×2048; displayed on the same canvas as the SVG without resampling",
+  "physical_asset_status": "included",
+  "physical_texture_dimensions": "2048x2048",
+  "layers": [
+    "embedded-satellite-raster",
+    "editable-country-boundaries",
+    "user-supplied-physical-raster"
+  ],
+  "recommended_view": "india",
+  "starter_asset": true,
+  "notes": "The SVG contains its own embedded satellite background and 257 editable country/territory paths. The supplied physical PNG is bundled as the optional Physical style layer. Both source files are preserved without modifying their dimensions or viewBox. Alignment is visually paired on the same 2048×2048 canvas but has not been independently georeferenced."
+}

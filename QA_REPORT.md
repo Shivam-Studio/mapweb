@@ -1,5 +1,14 @@
 # MapMotion Studio 0.8.6 — QA report
 
+## 0.8.6 bundled India-view map verification
+
+- The repository now contains ten starter map folders; `world-satellite-india-view` is registered from the read-only deployment asset directory.
+- The supplied corrected SVG is included byte-for-byte as `world-india.svg` (2048×2048 viewBox, 257 editable country/territory paths).
+- The supplied physical PNG is included byte-for-byte as `physical-texture.png` (2048×2048 RGBA) and embedded as the Physical style `physical.svg` layer on the same 2048×2048 canvas.
+- `.gitignore` explicitly unignores the new built-in map directory; the Windows push script stages all ten starter maps.
+- The new map is bundled in the code release and does not require the upload-key / Git LFS user-upload workflow.
+- Public redistribution rights for the two user-supplied source assets were not provided; confirm permission before pushing to the public repository.
+
 ## Storage changes verified
 
 - Browser incremental SHA-256 hashing passes known test vectors.
@@ -16,11 +25,11 @@
 - `node QA_CAMERA_TEST.js` — passed (camera viewBox, zoom, pan and portrait framing regression).
 - `node QA_EXPORT_COLOUR_TEST.js` — passed (custom fill priority, physical-relief fallback, outline-free camera export, JPEG + transparent PNG package and preview-refresh wiring).
 - `python -m py_compile app.py backend/app.py qa_vercel_smoke.py` — passed.
-- `python qa_vercel_smoke.py` — passed (Vercel-mode FastAPI, frontend assets, health, all nine bundled maps and their asset routes, upload/pair/project API workflow and SVG safety checks).
+- `python qa_vercel_smoke.py` — passed (Vercel-mode FastAPI, frontend assets, health, all ten bundled maps and their asset routes, upload/pair/project API workflow and SVG safety checks).
 
 ## Browser integration checks
 
-A local headless Chromium/Playwright integration test ran the actual 0.8.3 HTML, CSS and JavaScript with the nine real bundled map packs. API responses were mocked locally so the UI and browser export pipeline could be exercised without changing the live Vercel deployment.
+A local headless Chromium/Playwright integration test ran the actual 0.8.3 HTML, CSS and JavaScript with the ten real bundled map packs. API responses were mocked locally so the UI and browser export pipeline could be exercised without changing the live Vercel deployment.
 
 - World map geometry loaded: 257 selectable regions.
 - Applying `#4dff00` to China updated the live SVG fill and computed browser colour; the camera preview rendered 35,923 green pixels.

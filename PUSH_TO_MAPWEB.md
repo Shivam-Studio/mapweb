@@ -4,7 +4,7 @@
 2. Open PowerShell in the project root.
 3. Run `git status` once to check for unrelated local edits.
 4. Run `PUSH_TO_GITHUB.bat` (PowerShell alternative: `cmd /c PUSH_TO_GITHUB.bat`).
-5. The BAT stages curated starter map packs because `.gitignore` explicitly allows the nine bundled map folders. It continues to ignore user uploads, databases, secrets and local environments.
+5. The BAT stages curated starter map packs because `.gitignore` explicitly allows all ten bundled map folders. It continues to ignore user uploads, databases, secrets and local environments.
 
 The script creates a backup branch, fetches `origin/main`, merges without force-pushing, and stops on conflicts rather than overwriting either side.
 

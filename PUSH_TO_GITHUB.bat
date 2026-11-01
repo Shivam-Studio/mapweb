@@ -1,12 +1,12 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title MapMotion Studio - 0.8.5 Export Fix Push
+title MapMotion Studio - 0.8.6 Bundled Map Push
 
 set "REMOTE_URL=https://github.com/Shivam-Studio/mapweb.git"
 
 echo ==============================================================
-echo   MAPMOTION STUDIO 0.8.5 - SAFE EXPORT FIX PUSH
+echo   MAPMOTION STUDIO 0.8.6 - BUNDLED MAP PUSH
 echo   Target: Shivam-Studio/mapweb ^(main^)
 echo ==============================================================
 echo.
@@ -31,7 +31,7 @@ git remote set-url origin "%REMOTE_URL%"
 if errorlevel 1 goto :failed
 
 rem Preserve the current local commit before any merge/abort operation.
-git branch "backup/pre-vercel-fix-%RANDOM%"
+git branch "backup/pre-bundled-map-%RANDOM%"
 
 rem Recover an interrupted merge without discarding ordinary working-tree edits.
 if exist ".git\MERGE_HEAD" (
@@ -64,14 +64,14 @@ for %%F in (app.py pyproject.toml requirements.txt backend\app.py frontend\index
 )
 
 echo.
-echo Staging updated source, export fixes and the nine bundled starter maps...
+echo Staging updated source, export fixes and all ten bundled starter maps...
 git add -A
 if errorlevel 1 goto :failed
 
 git diff --cached --quiet
 if errorlevel 1 (
-  echo Creating MapMotion Studio 0.8.5 Git LFS storage commit...
-  git commit -m "Fix upload authentication retry and add secure key setup helper"
+  echo Creating MapMotion Studio 0.8.6 bundled-map commit...
+  git commit -m "Bundle India-view satellite and physical starter map"
   if errorlevel 1 goto :failed
 ) else (
   echo No new local changes to commit.

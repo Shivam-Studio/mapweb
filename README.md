@@ -9,7 +9,7 @@ This release improves GitHub Git LFS upload authentication recovery and includes
 1. Install Python 3.10+ and enable **Add Python to PATH**.
 2. Double-click `run_windows.bat`.
 3. Open <http://127.0.0.1:8000> if the browser does not open automatically.
-4. Choose one of the nine included starter maps in **Map Library**, or upload an SVG boundary file you own or are licensed to use.
+4. Choose one of the ten included starter maps in **Map Library**, or upload an SVG boundary file you own or are licensed to use.
 5. Open the map in the editor and use its default world/continent camera.
 
 The launcher creates `.venv`, installs `backend/requirements.txt`, and starts FastAPI on port 8000. On Windows, the SQLite database remains under `%LOCALAPPDATA%\MapMotionStudio\database.sqlite3`; uploaded map assets remain in `storage/maps/`.
@@ -96,7 +96,7 @@ python qa_vercel_smoke.py
 python qa_github_lfs.py
 ```
 
-The QA smoke tests check the nine bundled maps, frontend assets, local camera/export behaviour, Vercel upload blocking when Git LFS is not configured, and mocked Git LFS upload/catalog flows. They do not prove that the connected GitHub token, repository permissions, real LFS upload URLs, or production Vercel deployment are configured correctly.
+The QA smoke tests check all ten bundled maps, frontend assets, local camera/export behaviour, Vercel upload blocking when Git LFS is not configured, and mocked Git LFS upload/catalog flows. They do not prove that the connected GitHub token, repository permissions, real LFS upload URLs, or production Vercel deployment are configured correctly.
 
 ## Licence
 

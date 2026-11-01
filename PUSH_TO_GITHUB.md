@@ -10,7 +10,7 @@
 
 The script targets `https://github.com/Shivam-Studio/mapweb.git`. It creates a recovery branch, repairs the known interrupted-merge marker if present, fetches `origin/main`, merges without force-pushing, and stops safely on other conflicts.
 
-The nine curated starter maps remain committed normally. New user-uploaded maps are written by the deployed app as Git LFS objects under `storage/maps/user-uploads/`; their tiny pointer files, metadata and catalog are committed to `main`. `.gitattributes` tracks uploaded SVG, PNG, JPG and WebP binaries with Git LFS while keeping JSON metadata and the catalog in ordinary Git. Databases, secrets, `.venv`, and local project data remain excluded.
+All ten curated starter maps remain committed normally, including `storage/maps/world-satellite-india-view/`. The `.gitignore` whitelist in this ZIP explicitly includes that new folder so `git add -A` stages it. These built-in assets are normal Git files; Git LFS is reserved for later user uploads under `storage/maps/user-uploads/`. New user-uploaded maps are written by the deployed app as Git LFS objects under `storage/maps/user-uploads/`; their tiny pointer files, metadata and catalog are committed to `main`. `.gitattributes` tracks uploaded SVG, PNG, JPG and WebP binaries with Git LFS while keeping JSON metadata and the catalog in ordinary Git. Databases, secrets, `.venv`, and local project data remain excluded.
 
 Before deploying, confirm that `.gitattributes` is committed and Git LFS is enabled for the GitHub repository. Configure the server-side Vercel variables listed in `VERCEL_DEPLOYMENT.md`.
 
