@@ -1,142 +1,125 @@
 @echo off
-setlocal EnableExtensions EnableDelayedExpansion
+setlocal EnableExtensions
 cd /d "%~dp0"
-title MapMotion Studio - Safe GitHub Publisher
+title MapMotion Studio - Safe Vercel Fix Push
 
-set "EXPECTED_HTTPS=https://github.com/Shivam-Studio/mapweb.git"
-set "EXPECTED_HTTPS_NOGIT=https://github.com/Shivam-Studio/mapweb"
-set "EXPECTED_SSH=git@github.com:Shivam-Studio/mapweb.git"
-set "ORIGIN_URL="
+set "REMOTE_URL=https://github.com/Shivam-Studio/mapweb.git"
 
 echo ==============================================================
-echo   MAPMOTION STUDIO 0.8.1 - SAFE GITHUB PUSH
-echo   Target: Shivam-Studio/mapweb
+echo   MAPMOTION STUDIO - SAFE VERCEL DEPLOYMENT FIX PUSH
+echo   Target: Shivam-Studio/mapweb ^(main^)
 echo ==============================================================
 echo.
 
-where git >nul 2>nul
-if errorlevel 1 (
-  echo ERROR: Git for Windows is not installed or not on PATH.
-  echo Install it from https://git-scm.com/download/win
+if not exist ".git" (
+  echo ERROR: .git folder not found.
+  echo Extract this package into your existing MapMotionStudio Git folder.
   pause
   exit /b 1
 )
 
-if not exist ".git" (
-  echo Initializing Git in this extracted project folder...
-  git init
-  if errorlevel 1 goto :failed
+for /f %%R in ('git remote get-url origin 2^>nul') do set "CURRENT_REMOTE=%%R"
+if not defined CURRENT_REMOTE (
+  echo ERROR: Git remote 'origin' is missing.
+  pause
+  exit /b 1
 )
 
-git branch -M main
+echo Remote: %CURRENT_REMOTE%
+echo Updating origin to the intended repository...
+git remote set-url origin "%REMOTE_URL%"
 if errorlevel 1 goto :failed
 
-for /f "delims=" %%U in ('git remote get-url origin 2^>nul') do set "ORIGIN_URL=%%U"
-if not defined ORIGIN_URL (
-  echo Adding the expected GitHub remote...
-  git remote add origin "%EXPECTED_HTTPS%"
-  if errorlevel 1 goto :failed
-) else (
-  if /I not "%ORIGIN_URL%"=="%EXPECTED_HTTPS%" if /I not "%ORIGIN_URL%"=="%EXPECTED_HTTPS_NOGIT%" if /I not "%ORIGIN_URL%"=="%EXPECTED_SSH%" (
-    echo ERROR: This folder is already connected to a different GitHub repository:
-    echo   %ORIGIN_URL%
-    echo.
-    echo No remote was changed and nothing was pushed.
-    echo Check the repository before changing origin manually.
+rem Preserve the current local commit before any merge/abort operation.
+git branch "backup/pre-vercel-fix-%RANDOM%"
+
+rem Recover an interrupted merge without discarding ordinary working-tree edits.
+if exist ".git\MERGE_HEAD" (
+  echo An unfinished Git merge was detected. Aborting that incomplete merge...
+  git merge --abort
+  if errorlevel 1 (
+    echo ERROR: Could not abort the unfinished merge safely.
+    echo Run git status and send the output for manual recovery.
     pause
-    exit /b 2
+    exit /b 1
   )
 )
 
-for /f "delims=" %%N in ('git config user.name 2^>nul') do set "GIT_NAME=%%N"
-for /f "delims=" %%E in ('git config user.email 2^>nul') do set "GIT_EMAIL=%%E"
-if not defined GIT_NAME (
-  set /p "GIT_NAME=Git commit name [Shivam-Studio]: "
-  if not defined GIT_NAME set "GIT_NAME=Shivam-Studio"
-  git config user.name "!GIT_NAME!"
+rem Remove conflict markers left in the root requirements file by the earlier add/add merge.
+findstr /c:"<<<<<<<" requirements.txt >nul 2>nul
+if not errorlevel 1 (
+  echo Repairing conflict markers in requirements.txt...
+  >requirements.txt echo fastapi==0.115.12
+  >>requirements.txt echo uvicorn[standard]==0.34.2
+  >>requirements.txt echo python-multipart==0.0.20
 )
-if not defined GIT_EMAIL (
-  echo Enter the email you want recorded on Git commits.
-  set /p "GIT_EMAIL=Git commit email: "
-  if not defined GIT_EMAIL (
-    echo ERROR: A commit email is required. Nothing was pushed.
+
+for %%F in (app.py pyproject.toml requirements.txt backend\app.py frontend\index.html frontend\app.js frontend\styles.css) do (
+  if not exist "%%F" (
+    echo ERROR: Required file missing: %%F
+    echo Make sure the ZIP was extracted into the project root.
     pause
-    exit /b 3
+    exit /b 1
   )
-  git config user.email "!GIT_EMAIL!"
 )
 
 echo.
-echo Staging project files (ignored secrets, databases and local environments stay excluded)...
+echo Staging updated project files...
 git add -A
 if errorlevel 1 goto :failed
-git status --short
 
 git diff --cached --quiet
 if errorlevel 1 (
-  echo.
-  echo Creating update commit...
-  git commit -m "MapMotion Studio 0.8.1 - Vercel deployment setup"
+  echo Creating deployment fix commit...
+  git commit -m "Fix Vercel FastAPI root deployment and frontend API states"
   if errorlevel 1 goto :failed
 ) else (
-  echo.
-  echo No new staged changes. The current commit will be synchronized.
-)
-
-rem Create a local recovery branch before reconciling with the remote main branch.
-git rev-parse --verify HEAD >nul 2>nul
-if not errorlevel 1 (
-  for /f %%T in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd-HHmmss"') do set "STAMP=%%T"
-  if defined STAMP git branch "backup/pre-vercel-sync-!STAMP!" HEAD >nul 2>nul
+  echo No new local changes to commit.
 )
 
 echo.
-echo Fetching the existing GitHub main branch...
+echo Fetching latest GitHub main...
 git fetch origin
 if errorlevel 1 goto :failed
 
-git show-ref --verify --quiet refs/remotes/origin/main
-if errorlevel 1 goto :push
-
-git merge-base HEAD origin/main >nul 2>nul
+rem Fast-forward is preferred; merge remote commits if local and remote diverged.
+git merge-base --is-ancestor origin/main HEAD
 if errorlevel 1 (
-  echo Existing GitHub history is unrelated. Merging without force-pushing...
-  git merge origin/main --allow-unrelated-histories -X ours --no-edit
-) else (
-  echo Synchronizing local and remote main branches without force-pushing...
-  git merge origin/main -X ours --no-edit
-)
-if errorlevel 1 (
-  echo.
-  echo ERROR: Git could not merge automatically.
-  echo No force-push was attempted. Resolve the merge, then run this file again.
-  pause
-  exit /b 4
+  echo Synchronizing remote main before push...
+  git merge --no-edit origin/main
+  if errorlevel 1 goto :conflict
 )
 
-:push
 echo.
-echo Pushing main to GitHub. Complete browser sign-in if Git Credential Manager asks...
+echo Pushing to GitHub...
 git push -u origin main
 if errorlevel 1 goto :failed
 
 echo.
 echo ==============================================================
-echo SUCCESS: source pushed to https://github.com/Shivam-Studio/mapweb
+echo   PUSH SUCCESSFUL
+echo   Repository: https://github.com/Shivam-Studio/mapweb
 echo ==============================================================
 echo.
-echo VERCEL REMINDER:
-echo In Vercel Settings -^> Git, connect Shivam-Studio/mapweb.
-echo Do not leave the project connected to stephinhenry91-design/mapweb.
-echo Set the Vercel Root Directory to the repository root (./).
+echo Vercel must use this repository with Root Directory set to ./ .
+echo The previously reviewed frontend-only Vercel project used a different repository.
 echo.
 pause
 exit /b 0
 
+:conflict
+echo.
+echo MERGE CONFLICT: Git stopped to protect both versions.
+echo No force push was attempted.
+echo Run: git status
+echo Send that output so the remaining conflict can be resolved safely.
+pause
+exit /b 2
+
 :failed
 echo.
-echo PUSH NOT COMPLETED. Read the Git error above.
-echo This script never uses git push --force.
-echo Confirm GitHub sign-in and write access to Shivam-Studio/mapweb.
+echo PUSH FAILED. No force push was attempted.
+echo Run: git status
+echo Send the complete output for diagnosis.
 pause
 exit /b 1
