@@ -48,7 +48,7 @@ def main() -> None:
     with TestClient(app) as client:
         page = client.get("/")
         check(page.status_code == 200 and "MapMotion Studio" in page.text, "Home page must load")
-        check("9 ready-to-edit maps" in page.text and "CC BY 4.0" in page.text, "Map Library must visibly advertise the starter maps and source license")
+        check("10 ready-to-edit maps" in page.text and "CC BY 4.0" in page.text, "Map Library must visibly advertise the starter maps and source license")
 
         js = client.get("/assets/app.js")
         css = client.get("/assets/styles.css")
@@ -61,7 +61,7 @@ def main() -> None:
         check(health.status_code == 200, "Health endpoint must return 200")
         health_data = health.json()
         check(health_data.get("ok") is True, "Health endpoint must report ok")
-        check(health_data.get("version") == "0.8.4", "Health endpoint must report 0.8.4")
+        check(health_data.get("version") == "0.8.6", "Health endpoint must report 0.8.6")
         check(health_data.get("storage_mode") == "ephemeral", "Vercel without GitHub credentials must report missing durable map storage")
         check(health_data.get("map_storage_mode") == "ephemeral", "Map storage must remain marked ephemeral until GitHub LFS is configured")
         check(health_data.get("persistent_storage_configured") is False, "Vercel preview must not claim map persistence without GitHub LFS")
@@ -71,13 +71,14 @@ def main() -> None:
         all_maps = initial_maps.json()
         bundled = next((item for item in all_maps if item["id"] == "qa-bundled-map"), None)
         check(bundled is not None, "Read-only bundled fixture should be registered in Vercel mode")
-        expected_starters = {"world-india", "world-physical-india", "asia", "europe", "africa", "north-america", "south-america", "oceania", "india-neighbours"}
+        expected_starters = {"world-india", "world-satellite-india-view", "world-physical-india", "asia", "europe", "africa", "north-america", "south-america", "oceania", "india-neighbours"}
         registered_starters = {item["id"] for item in all_maps} & expected_starters
-        check(registered_starters == expected_starters, f"All nine bundled starter maps must register; got {sorted(registered_starters)}")
+        check(registered_starters == expected_starters, f"All ten bundled starter maps must register; got {sorted(registered_starters)}")
         by_id = {item["id"]: item for item in all_maps}
         expected_categories = {
             "world-india": "World Maps",
             "world-physical-india": "World Maps",
+            "world-satellite-india-view": "World Maps",
             "asia": "Continent Maps",
             "europe": "Continent Maps",
             "africa": "Continent Maps",
@@ -90,8 +91,12 @@ def main() -> None:
             check(by_id[starter_id]["category"] == category, f"{starter_id} must use the visible Map Library filter category {category}")
         for starter_id in sorted(expected_starters):
             check(by_id[starter_id]["metadata"].get("starter_asset") is True, f"{starter_id} must be marked as a starter asset")
-            check(by_id[starter_id]["metadata"].get("source_credit") == "Map by amCharts", f"{starter_id} must include visible map attribution metadata")
-            check(by_id[starter_id]["metadata"].get("license_url") == "https://creativecommons.org/licenses/by/4.0/", f"{starter_id} must link to the CC BY 4.0 license")
+            if starter_id == "world-satellite-india-view":
+                check("User-supplied" in by_id[starter_id]["metadata"].get("source", ""), "New satellite map must retain user-supplied source metadata")
+                check("not specified" in by_id[starter_id]["metadata"].get("license", ""), "New satellite map must not imply an unprovided redistribution license")
+            else:
+                check(by_id[starter_id]["metadata"].get("source_credit") == "Map by amCharts", f"{starter_id} must include visible map attribution metadata")
+                check(by_id[starter_id]["metadata"].get("license_url") == "https://creativecommons.org/licenses/by/4.0/", f"{starter_id} must link to the CC BY 4.0 license")
             map_svg = client.get(f"/api/maps/{starter_id}/asset/world-india.svg")
             check(map_svg.status_code == 200 and b"<svg" in map_svg.content and b"<path" in map_svg.content, f"{starter_id} editable SVG must be served")
             physical_svg = client.get(f"/api/maps/{starter_id}/asset/physical.svg")
@@ -133,7 +138,7 @@ def main() -> None:
         check(deleted.status_code == 200 and deleted.json().get("ok") is True, "Project delete must succeed")
 
 
-    print("PASS: Vercel-mode home page, static assets, health, all nine starter-map registrations, SVG/physical/texture/thumbnail asset routes, and project CRUD.")
+    print("PASS: Vercel-mode home page, static assets, health, all ten starter-map registrations, SVG/physical/texture/thumbnail asset routes, and project CRUD.")
     print("PASS: Vercel refuses legacy multipart map uploads and refuses direct LFS uploads until server-side GitHub credentials are configured.")
     print("NOTE: This smoke test does not connect to a real GitHub repository; see qa_github_lfs.py for mocked Git LFS route tests.")
 

@@ -1,4 +1,4 @@
-# Push MapMotion Studio 0.8.4 to GitHub
+# Push MapMotion Studio 0.8.6 to GitHub
 
 ## Existing Windows clone (recommended)
 

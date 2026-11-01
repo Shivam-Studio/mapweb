@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.6 — Bundled India-view satellite and physical map
+
+- Added a new built-in **World Satellite Map — India View** starter asset using the supplied corrected 2048×2048 SVG with its embedded satellite raster and 257 editable country/territory paths.
+- Bundled the supplied 2048×2048 physical map PNG as a separate Physical style layer, embedded in `physical.svg` on the same 2048×2048 canvas.
+- Preserved both supplied source images without changing their pixel dimensions or the SVG viewBox; added a matching thumbnail and map metadata.
+- The map is part of the code repository and appears in Map Library after deployment; adding this built-in asset does not require the MapMotion upload key or the Git LFS upload form.
+- Licensing/projection metadata is explicitly marked as user-supplied and unverified; confirm redistribution rights before publishing the repository.
+
+## 0.8.5 — Upload authentication recovery
+
+- Upload-key prompt trims accidental leading/trailing whitespace.
+- A rejected upload key (HTTP 403) clears the cached value and prompts once for the current key, instead of reusing the rejected value repeatedly.
+- Satellite-upload and alignment-verification requests share the same authentication retry behaviour.
+- Added a Windows helper to securely generate a new upload key, save it as a Vercel Secret, and verify the clipboard copy without printing the value.
+- No credentials are embedded in frontend code or committed source files.
+
 ## 0.8.4 — GitHub Git LFS map storage
 
 - Map uploads from Vercel use direct browser-to-GitHub Git LFS transfers; large file bytes do not pass through Vercel Functions.

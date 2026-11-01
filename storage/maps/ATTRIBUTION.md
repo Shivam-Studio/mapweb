@@ -15,3 +15,12 @@ The editable country-boundary geometry in the starter maps is based on the user-
 The physical relief imagery shipped with the World Physical and continent starter maps is project-generated illustrative shaded-relief artwork. It is **not** a measured DEM, satellite image, or authoritative elevation dataset.
 
 No third-party satellite imagery is included in this starter collection.
+
+## User-supplied World Satellite Map — India View
+
+The `world-satellite-india-view/` folder contains two assets supplied by the project owner for this release:
+
+- `world-india.svg`: a 2048×2048 SVG with an embedded satellite background and 257 editable country/territory boundary paths.
+- `physical-texture.png`: a 2048×2048 physical-style map raster, embedded into `physical.svg` for the editor's Physical style.
+
+These user-supplied files are included as provided. No source URL, license grant, or projection declaration was supplied with them, so this notice does not assign a license or certify geospatial accuracy. Confirm permission to redistribute both assets before pushing the repository publicly.

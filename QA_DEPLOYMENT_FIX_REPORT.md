@@ -1,4 +1,4 @@
-# QA Report — MapMotion Studio 0.8.4
+# QA Report — MapMotion Studio 0.8.5
 
 ## Bundled map collection
 

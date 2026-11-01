@@ -1,4 +1,4 @@
-# MapMotion Studio 0.8.4 — QA report
+# MapMotion Studio 0.8.6 — QA report
 
 ## Storage changes verified
 

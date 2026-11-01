@@ -1,8 +1,8 @@
-# MapMotion Studio 0.8.4 — Git LFS-backed map storage
+# MapMotion Studio 0.8.6 — Bundled India-view satellite and physical map
 
 MapMotion Studio is a browser-based SVG map editor for map-animation creators. It provides country/region selection, world and continent camera framing, map styling, optional physical-terrain SVG layers when supplied by a map, manual raster pairing, saved projects, and three animator-focused export actions.
 
-This release adds durable GitHub Git LFS storage for user-uploaded map assets. The browser transfers large SVG/raster bytes directly to GitHub LFS; Vercel receives only small upload-authorization and Git metadata requests. Saved project records still use SQLite and remain temporary on Vercel.
+This release improves GitHub Git LFS upload authentication recovery and includes a secure Windows upload-key setup helper. User-uploaded map assets remain stored durably in GitHub Git LFS. The browser transfers large SVG/raster bytes directly to GitHub LFS; Vercel receives only small upload-authorization and Git metadata requests. Saved project records still use SQLite and remain temporary on Vercel.
 
 ## Quick start — Windows local app
 
@@ -64,7 +64,7 @@ Add these to **Vercel → Project → Settings → Environment Variables** for P
 | `MAPMOTION_UPLOAD_KEY` | A long random secret used when the administrator uploads or updates map assets |
 | `MAPMOTION_MAX_LFS_FILE_MB` | Optional. Default `2000` MB (conservative below Free/Pro max); use `4000` for Team or `5000` for Enterprise Cloud |
 
-Keep the GitHub token and upload key server-side in Vercel Environment Variables. Never put either secret in `frontend/app.js`, HTML, or a committed `.env` file. The administrator enters the upload key in the browser when starting an upload; it remains in page memory only.
+Keep the GitHub token and upload key server-side in Vercel Environment Variables. Never put either secret in `frontend/app.js`, HTML, or a committed `.env` file. The administrator enters the upload key in the browser when starting an upload; it remains in page memory only. Run `SET_UPLOAD_KEY.bat` on Windows to generate and copy a fresh key and save it directly to Vercel without exposing it in chat or source control.
 
 The repository must contain `.gitattributes` with the rule for `storage/maps/user-uploads/**`. This ZIP includes that file. Push this release to `Shivam-Studio/mapweb` before enabling the Vercel variables.
 
@@ -78,7 +78,7 @@ See [`VERCEL_DEPLOYMENT.md`](VERCEL_DEPLOYMENT.md) for setup and validation deta
 
 ## Map assets and licences
 
-This release includes nine starter maps: a World Map — India View, a dedicated World Physical Map — India View, and Asia, Europe, Africa, North America, South America, Oceania, and India & Neighbours regional maps. Country boundary geometry is based on the user-supplied amCharts world SVG and includes the visible credit plus CC BY 4.0 attribution. See [`storage/maps/ATTRIBUTION.md`](storage/maps/ATTRIBUTION.md). The physical relief layer is illustrative project-generated terrain, not a measured elevation dataset. No third-party satellite imagery is bundled. A visual contact sheet is included as [`STARTER_MAPS_PREVIEW.jpg`](STARTER_MAPS_PREVIEW.jpg).
+This release includes ten starter maps: World Map — India View, World Satellite Map — India View, World Physical Map — India View, and Asia, Europe, Africa, North America, South America, Oceania, and India & Neighbours regional maps. The new World Satellite map preserves the supplied 2048×2048 SVG with its embedded satellite raster and 257 editable boundaries; its separate Physical style uses the supplied 2048×2048 PNG on the same canvas. These user-supplied assets have no redistribution license or projection declaration recorded, so verify your rights before publishing the public repository. The other country-boundary assets based on amCharts retain the visible credit and CC BY 4.0 attribution. See [`storage/maps/ATTRIBUTION.md`](storage/maps/ATTRIBUTION.md). The other physical-relief starter textures are illustrative, not measured elevation datasets. A visual contact sheet is included as [`STARTER_MAPS_PREVIEW.jpg`](STARTER_MAPS_PREVIEW.jpg).
 
 Uploaded map assets on Vercel use GitHub Git LFS when the required server-side environment variables are configured. They are not written into the Vercel filesystem. Git LFS per-file limits and account quotas apply. Saved projects are still temporary on Vercel; see [`VERCEL_DEPLOYMENT.md`](VERCEL_DEPLOYMENT.md).
 

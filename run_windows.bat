@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 title MapMotion Studio - Local Workspace
 
-echo MapMotion Studio 0.8.4
+echo MapMotion Studio 0.8.5
 echo.
 
 where py >nul 2>nul

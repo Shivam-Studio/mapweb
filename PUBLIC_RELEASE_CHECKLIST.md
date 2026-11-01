@@ -1,7 +1,8 @@
-# Public release checklist — MapMotion Studio 0.8.4
+# Public release checklist — MapMotion Studio 0.8.6
 
 - [x] Repository target documented as `Shivam-Studio/mapweb`.
-- [x] Nine starter maps included with amCharts attribution and CC BY 4.0 notice.
+- [x] Ten starter maps included; amCharts-derived assets retain CC BY 4.0 attribution.
+- [ ] Confirm redistribution rights for the new user-supplied satellite SVG and physical PNG before public release.
 - [x] `.gitattributes` tracks `storage/maps/user-uploads/**` using Git LFS.
 - [x] Browser-to-GitHub LFS direct upload flow added; large map bytes bypass Vercel Function request limits.
 - [x] Server-side token and separate admin upload-key configuration documented.
