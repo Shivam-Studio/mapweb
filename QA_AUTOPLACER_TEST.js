@@ -50,7 +50,7 @@ const app = fs.readFileSync(path.join(__dirname,'frontend/app.js'),'utf8');
 assert.match(html,/data-page="autoplacer"/,'AutoPlacer navigation must be present');
 assert.match(html,/id="page-autoplacer"/,'AutoPlacer workspace must be present');
 assert.match(html,/id="apActiveGcp"/,'Calibration point picker must be present');
-assert.match(html,/autoplacer\.js\?v=0\.8\.8/,'Geometry engine must be loaded before app.js');
+assert.match(html,/autoplacer\.js\?v=0\.8\.9/,'Geometry engine must be loaded before app.js');
 assert.match(app,/api\.geographicProjector|geographicProjector/,'App must use the geographic projection engine');
 assert.match(app,/apExportPackage/,'App must export a positioned state package');
 assert.match(app,/function apPickCalibrationPoint/,'Unknown crops must support click-to-record image control points');
@@ -83,6 +83,13 @@ const sandbox = {
   Number, Math
 };
 vm.createContext(sandbox);
+assert.match(app,/media\.githubusercontent\.com\/media\/wmgeolab\/geoBoundaries/,'The loader must try the Git LFS media endpoint first');
+assert.match(html,/id="apRetryLoad"/,'The state loader must expose a retry control');
+vm.runInContext(sliceFunction('function apParseBoundaryText(', 'async function loadAutoPlacerGeometries'), sandbox);
+assert.throws(() => sandbox.apParseBoundaryText('version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 100'), /Git LFS pointer/);
+assert.throws(() => sandbox.apParseBoundaryText('not json', '/api/boundaries/india-adm1'), /\/api\/boundaries\/india-adm1/);
+const parsedBoundary = sandbox.apParseBoundaryText(JSON.stringify({type:'FeatureCollection',features:[]}));
+assert.equal(parsedBoundary.type,'FeatureCollection');
 vm.runInContext(sliceFunction('function apCalibrationPointsComplete()', 'function apShowCalibrationSetup'), sandbox);
 vm.runInContext(sliceFunction('function apPickCalibrationPoint(event)', 'async function initAutoPlacerPage'), sandbox);
 function clickAt(x,y) {

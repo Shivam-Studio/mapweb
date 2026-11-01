@@ -1,12 +1,12 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title MapMotion Studio - 0.8.8 Bundled Map Push
+title MapMotion Studio - 0.8.9 India State Selector Fix
 
 set "REMOTE_URL=https://github.com/Shivam-Studio/mapweb.git"
 
 echo ==============================================================
-echo   MAPMOTION STUDIO 0.8.8 - BUNDLED MAP PUSH
+echo   MAPMOTION STUDIO 0.8.9 - INDIA STATE SELECTOR + EXPORT FIX
 echo   Target: Shivam-Studio/mapweb ^(main^)
 echo ==============================================================
 echo.
@@ -64,14 +64,14 @@ for %%F in (app.py pyproject.toml requirements.txt backend\app.py frontend\index
 )
 
 echo.
-echo Staging updated source, export fixes and all ten bundled starter maps...
+echo Staging India state selector / export fix, backend boundary delivery and bundled starter maps...
 git add -A
 if errorlevel 1 goto :failed
 
 git diff --cached --quiet
 if errorlevel 1 (
-  echo Creating MapMotion Studio 0.8.8 bundled-map commit...
-  git commit -m "Bundle India-view satellite and physical starter map"
+  echo Creating MapMotion Studio 0.8.9 bundled-map commit...
+  git commit -m "Fix India state selection and positioned export"
   if errorlevel 1 goto :failed
 ) else (
   echo No new local changes to commit.

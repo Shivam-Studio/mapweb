@@ -1,4 +1,4 @@
-# Global Position AutoPlacer — MapMotion Studio 0.8.8
+# Global Position AutoPlacer — MapMotion Studio 0.8.9
 
 ## What it does
 
@@ -35,7 +35,7 @@ Keep the overlay and base map at the exact same canvas dimensions. Place both la
 
 - The dataset is geoBoundaries **India ADM1** (state / Union Territory). Its API metadata reports 36 administrative units and a represented boundary year of **2011**. Verify newer administrative changes for time-sensitive work.
 - The dataset source metadata lists the source as the DataMeet India community and Election Commission of India, and the licence as **Creative Commons Attribution 2.5 India (CC BY 2.5 IN)**. Retain attribution when distributing derived outputs.
-- The geometry is fetched from a pinned geoBoundaries commit when the AutoPlacer is opened; the browser needs internet access. If the boundary host is unavailable, the AutoPlacer displays a clear data-loading error and leaves the rest of MapMotion usable.
+- The geometry is fetched from a pinned geoBoundaries commit through the same-origin FastAPI endpoint, validated as a 36-feature GeoJSON collection, and cached in the function runtime for one day. A direct Git LFS media request is retained as a browser fallback. If both delivery paths are unavailable, the state dropdown shows a retry control and leaves the rest of MapMotion usable.
 - A map image alone does not reveal its projection and exact geographic extent. Unknown third-party crops need bounds or control points. There is no mathematically reliable way to guarantee exact placement from arbitrary pixels without a geographic reference.
 - The user's existing supplied India/world SVGs have no verified projection declaration. The AutoPlacer does not silently assume those assets are georeferenced.
 

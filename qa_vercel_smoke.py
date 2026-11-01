@@ -61,7 +61,7 @@ def main() -> None:
         check(health.status_code == 200, "Health endpoint must return 200")
         health_data = health.json()
         check(health_data.get("ok") is True, "Health endpoint must report ok")
-        check(health_data.get("version") == "0.8.8", "Health endpoint must report 0.8.8")
+        check(health_data.get("version") == "0.8.9", "Health endpoint must report 0.8.9")
         check(health_data.get("storage_mode") == "ephemeral", "Vercel without GitHub credentials must report missing durable map storage")
         check(health_data.get("map_storage_mode") == "ephemeral", "Map storage must remain marked ephemeral until GitHub LFS is configured")
         check(health_data.get("persistent_storage_configured") is False, "Vercel preview must not claim map persistence without GitHub LFS")

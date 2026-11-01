@@ -167,7 +167,7 @@
 .map-card .source-credit{display:block;margin-top:6px;font-size:10px;color:var(--muted, #9aa8b6)}
 
 
-/* 0.8.8 — geographic state AutoPlacer */
+/* 0.8.9 — geographic state AutoPlacer */
 .autoplacer-layout{display:grid;grid-template-columns:minmax(310px,390px) minmax(0,1fr);gap:15px;align-items:start}
 .ap-controls,.ap-preview-panel{padding:16px;min-width:0}
 .ap-controls{display:grid;gap:11px}

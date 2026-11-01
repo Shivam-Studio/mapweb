@@ -1,3 +1,11 @@
+## 0.8.9 — India state selection and export repair
+
+- Fixed India ADM1 loading: use a same-origin FastAPI boundary proxy backed by the Git LFS media endpoint; raw GitHub LFS pointer responses are rejected.
+- Detect LFS pointer responses and invalid GeoJSON before populating the state list.
+- Require all 36 state / Union Territory geometries before enabling preview and ZIP export.
+- Added a retry control when boundary download fails.
+- API validates all 36 polygon geometries and caches the dataset for one day.
+
 # Changelog
 
 ## 0.8.8 — Interactive crop calibration

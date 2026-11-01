@@ -17,7 +17,7 @@ The `world-satellite-india-view/` starter map includes the satellite raster embe
 User uploads are ignored by Git by default. Do not commit customer/private map packs, paid third-party map files, or raw imagery unless you have explicit redistribution rights.
 
 
-## India state / Union Territory boundaries used by Global Position AutoPlacer (0.8.8)
+## India state / Union Territory boundaries used by Global Position AutoPlacer (0.8.9)
 
 - Source: geoBoundaries India ADM1, pinned commit `9469f09592ced973a3448cf66b6100b741b64c0d`.
 - Source metadata reports 36 state / UT features and represented boundary year 2011.

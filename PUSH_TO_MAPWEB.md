@@ -1,4 +1,4 @@
-# Push MapMotion Studio 0.8.8 to GitHub
+# Push MapMotion Studio 0.8.9 to GitHub
 
 1. Extract this package over the existing `MapMotionStudio` folder. Keep `.git` and your local `storage/projects` data.
 2. Open PowerShell in the project root.

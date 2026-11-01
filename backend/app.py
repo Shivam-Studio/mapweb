@@ -10,7 +10,7 @@ SQLite projects remain temporary on Vercel in this release.
 from __future__ import annotations
 
 from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from contextlib import contextmanager
@@ -23,6 +23,8 @@ import shutil
 import sqlite3
 import time
 import uuid
+import urllib.request
+import urllib.error
 import xml.etree.ElementTree as ET
 
 from . import github_storage
@@ -94,7 +96,7 @@ DB = resolve_database_path()
 for directory in (MAPS, PROJECTS):
     directory.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="MapMotion Studio API", version="0.8.8")
+app = FastAPI(title="MapMotion Studio API", version="0.8.9")
 
 
 @contextmanager
@@ -216,6 +218,56 @@ def map_row(row: sqlite3.Row) -> dict:
     return result
 
 
+# India ADM1 is a geoBoundaries Git LFS asset. Serve it same-origin so the
+# browser does not depend on third-party CORS or raw GitHub's LFS pointer URL.
+INDIA_ADM1_MEDIA_URL = (
+    "https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/"
+    "9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/IND/ADM1/"
+    "geoBoundaries-IND-ADM1_simplified.geojson"
+)
+_INDIA_ADM1_CACHE: bytes | None = None
+
+
+@app.get("/api/boundaries/india-adm1")
+def india_adm1_boundaries():
+    global _INDIA_ADM1_CACHE
+    if _INDIA_ADM1_CACHE is None:
+        request = urllib.request.Request(
+            INDIA_ADM1_MEDIA_URL,
+            headers={"User-Agent": "MapMotion-Studio/0.8.9", "Accept": "application/geo+json, application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=8) as upstream:
+                payload = upstream.read(8 * 1024 * 1024 + 1)
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise HTTPException(502, f"Could not retrieve India state boundaries: {exc}") from exc
+        if len(payload) > 8 * 1024 * 1024:
+            raise HTTPException(502, "India state boundary dataset exceeded the 8 MB safety limit")
+        if payload.lstrip().startswith(b"version https://git-lfs.github.com/spec/v1"):
+            raise HTTPException(502, "Boundary provider returned a Git LFS pointer instead of the GeoJSON data")
+        try:
+            boundary_data = json.loads(payload)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise HTTPException(502, "Boundary provider did not return valid GeoJSON") from exc
+        if not isinstance(boundary_data, dict):
+            raise HTTPException(502, "Boundary provider did not return a GeoJSON object")
+        features = boundary_data.get("features")
+        valid_count = sum(
+            1 for feature in (features or [])
+            if isinstance(feature, dict)
+            and isinstance(feature.get("geometry"), dict)
+            and feature["geometry"].get("type") in {"Polygon", "MultiPolygon"}
+        )
+        if boundary_data.get("type") != "FeatureCollection" or valid_count != 36:
+            raise HTTPException(502, f"Expected 36 India state / UT boundaries; provider returned {valid_count}")
+        _INDIA_ADM1_CACHE = payload
+    return Response(
+        content=_INDIA_ADM1_CACHE,
+        media_type="application/geo+json",
+        headers={"Cache-Control": "public, max-age=86400", "X-MapMotion-Boundaries": "India-ADM1-36"},
+    )
+
+
 @app.get("/api/health")
 def health() -> dict:
     github_status = github_storage.config_status()
@@ -223,7 +275,7 @@ def health() -> dict:
     return {
         "ok": True,
         "product": "MapMotion Studio",
-        "version": "0.8.8",
+        "version": "0.8.9",
         "runtime": "vercel" if IS_VERCEL else "local",
         "storage_mode": map_storage_mode,
         "map_storage_mode": map_storage_mode,

@@ -81,7 +81,7 @@ def _github_api(method: str, path: str, payload: dict[str, Any] | None = None) -
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {TOKEN}",
         "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "MapMotion-Studio/0.8.8",
+        "User-Agent": "MapMotion-Studio/0.8.9",
     }
     body = None
     if payload is not None:
@@ -122,7 +122,7 @@ def _lfs_batch(operation: str, objects: list[dict[str, Any]]) -> list[dict[str, 
             "Accept": "application/vnd.git-lfs+json",
             "Content-Type": "application/vnd.git-lfs+json",
             "Authorization": f"Basic {auth}",
-            "User-Agent": "MapMotion-Studio/0.8.8",
+            "User-Agent": "MapMotion-Studio/0.8.9",
         },
         method="POST",
     )

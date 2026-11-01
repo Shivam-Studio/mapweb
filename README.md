@@ -1,4 +1,4 @@
-# MapMotion Studio 0.8.8 — Global Position AutoPlacer
+# MapMotion Studio 0.8.9 — Global Position AutoPlacer
 
 MapMotion Studio is a browser-based SVG map editor for map-animation creators. It provides country/region selection, world and continent camera framing, map styling, optional physical-terrain SVG layers when supplied by a map, manual raster pairing, saved projects, three animator-focused export actions, and the Global Position AutoPlacer for India state overlays.
 
@@ -26,7 +26,7 @@ The **Global Position AutoPlacer** exports an India state / Union Territory as a
 
 **Alignment rule:** geographic presets are extents, not image recognition. They align only when the base image has the same projection and exact geographic bounds. If a third-party crop has unknown margins, projection, or extent, calibrate it first. Three-point affine registration is a local approximation and is not a replacement for reprojection on large or highly curved maps. Existing bundled SVG map assets that do not declare a verified geographic reference system are not silently assumed to be EPSG:3857.
 
-The bundled app fetches the pinned geoBoundaries India ADM1 simplified dataset when the AutoPlacer page is opened. The source metadata reports a represented boundary year of 2011 and a CC BY 2.5 India licence. Attribute geoBoundaries and its source contributors; see [`AUTO_PLACER_GUIDE.md`](AUTO_PLACER_GUIDE.md).
+The app fetches the pinned geoBoundaries India ADM1 dataset through a same-origin FastAPI endpoint, validates all 36 state / UT polygon geometries, caches the response for one day, and falls back to the Git LFS media URL if needed. A raw GitHub LFS pointer is explicitly rejected so it cannot silently break the state selector. The source metadata reports a represented boundary year of 2011 and a CC BY 2.5 India licence. Attribute geoBoundaries and its source contributors; see [`AUTO_PLACER_GUIDE.md`](AUTO_PLACER_GUIDE.md).
 
 ## The three animator exports
 

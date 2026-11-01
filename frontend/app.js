@@ -676,8 +676,13 @@ $('uploadForm').addEventListener('submit',async e=>{e.preventDefault();const fd=
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 $('startWorkflow').onclick=()=>page('library');$('newProject').onclick=$('newProject2').onclick=()=>{state.projectId=null;state.projectName=null;state.mapId=preferredMapId();page('library')};$('openUpload').addEventListener('click',()=>{});$('exportNav')?.addEventListener('click',()=>page('editor'));$('studioNav')?.addEventListener('click',()=>page('dashboard'));
 
-// ---------------- Global Position AutoPlacer (0.8.8) ----------------
+// ---------------- Global Position AutoPlacer (0.8.9) ----------------
+// geoBoundaries stores this large dataset with Git LFS. The raw.githubusercontent.com
+// URL serves the small LFS pointer file, NOT the GeoJSON itself. Use the Git LFS
+// media endpoint first, then retain the older URLs only as checked fallbacks.
 const AP_DATA_URLS = [
+  '/api/boundaries/india-adm1',
+  'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/IND/ADM1/geoBoundaries-IND-ADM1_simplified.geojson',
   'https://raw.githubusercontent.com/wmgeolab/geoBoundaries/9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/IND/ADM1/geoBoundaries-IND-ADM1_simplified.geojson',
   'https://cdn.jsdelivr.net/gh/wmgeolab/geoBoundaries@9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/IND/ADM1/geoBoundaries-IND-ADM1_simplified.geojson'
 ];
@@ -709,6 +714,23 @@ function apDataStatus(message, ok=false) {
   el.textContent = message;
   el.style.borderColor = ok ? '#2e5548' : '';
   el.style.color = ok ? '#8cdbb4' : '';
+  const retry = $('apRetryLoad');
+  if (retry) retry.hidden = ok || !/unavailable|failed|could not|blocked/i.test(message);
+}
+function apParseBoundaryText(sourceText, sourceUrl='') {
+  const trimmed = String(sourceText || '').trim();
+  // GitHub raw URLs return this tiny pointer for Git LFS files. Treat it as a
+  // failed source so the loader continues to the actual media endpoint.
+  if (/^version https:\/\/git-lfs\.github\.com\/spec\/v1/m.test(trimmed)) {
+    throw new Error('This URL returned a Git LFS pointer instead of the GeoJSON.');
+  }
+  let data;
+  try { data = JSON.parse(trimmed); }
+  catch { throw new Error(`The boundary source did not return valid JSON${sourceUrl ? ` (${sourceUrl})` : ''}.`); }
+  if (data.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
+    throw new Error('The India boundary source is not a GeoJSON FeatureCollection.');
+  }
+  return data;
 }
 async function loadAutoPlacerGeometries() {
   if (apFeatureCollection) return apFeatureCollection;
@@ -717,19 +739,19 @@ async function loadAutoPlacerGeometries() {
     let lastError = null;
     for (const url of AP_DATA_URLS) {
       try {
-        const response = await fetch(url, {mode:'cors', cache:'force-cache'});
+        const response = await fetch(url, {mode:'cors', cache:'no-cache'});
         if (!response.ok) throw new Error(`Boundary dataset request failed (${response.status}).`);
-        const data = await response.json();
-        if (data.type !== 'FeatureCollection' || !Array.isArray(data.features) || !data.features.length) throw new Error('The India boundary dataset has an unexpected format.');
+        const data = apParseBoundaryText(await response.text(), url);
         const normalizer = window.MapMotionAutoPlacer;
         if (!normalizer) throw new Error('AutoPlacer geometry module did not load. Refresh this page.');
+        const features = data.features.map((feature, index) => ({...normalizer.normalizeFeature(feature), feature, index})).filter(item => item.geometry && ['Polygon','MultiPolygon'].includes(item.geometry.type));
+        if (features.length !== 36) throw new Error(`Expected 36 India state / UT boundaries, received ${features.length}.`);
         apFeatureCollection = data;
-        apFeatures = data.features.map((feature, index) => ({...normalizer.normalizeFeature(feature), feature, index})).filter(item => item.geometry && ['Polygon','MultiPolygon'].includes(item.geometry.type)).sort((a,b) => a.name.localeCompare(b.name));
-        if (!apFeatures.length) throw new Error('No state geometries were found in the dataset.');
+        apFeatures = features.sort((a,b) => a.name.localeCompare(b.name, 'en', {sensitivity:'base'}));
         return apFeatureCollection;
       } catch (error) { lastError = error; }
     }
-    throw new Error(`Could not load India state boundaries. Check your internet connection and reload. ${lastError?.message || ''}`.trim());
+    throw new Error(`Could not load all 36 India state / UT boundaries. The boundary server may be blocked or unavailable. Try again, or check your connection. ${lastError?.message || ''}`.trim());
   })();
   try { return await apLoadPromise; } catch (error) { apLoadPromise = null; throw error; }
 }
@@ -913,6 +935,8 @@ async function initAutoPlacerPage() {
     apDataStatus(`${apFeatures.length} state / UT geometries loaded · geoBoundaries ADM1`, true);
     await apRenderPreview();
   } catch (error) {
+    const select = $('apStateSelect');
+    if (select && !select.dataset.populated) select.innerHTML = '<option value="">State boundaries unavailable — retry loading</option>';
     apDataStatus('Boundary data unavailable');
     setApStatus(error.message,'error');
     throw error;
@@ -920,6 +944,13 @@ async function initAutoPlacerPage() {
 }
 function wireAutoPlacerUi() {
   apUiBound = true;
+  $('apRetryLoad')?.addEventListener('click',async()=>{
+    apFeatureCollection = null; apFeatures = []; apLoadPromise = null;
+    const select = $('apStateSelect'); select.dataset.populated = '';
+    select.innerHTML = '<option value="">Loading state boundaries…</option>';
+    apDataStatus('Retrying India state boundaries…'); setApStatus('Retrying boundary download…');
+    try { await initAutoPlacerPage(); } catch (e) { setApStatus(e.message,'error'); }
+  });
   $('apCropPreset').addEventListener('change',()=>{apSetPresetBounds();apSetModeVisibility();if(apFeatures.length)apRenderPreview().catch(e=>setApStatus(e.message,'error'));});
   $('apProjection').addEventListener('change',()=>{apSetPresetBounds();apSetModeVisibility();if(apFeatures.length)apRenderPreview().catch(e=>setApStatus(e.message,'error'));});
   $('apStateSelect').addEventListener('change',()=>{if(apFeatures.length)apRenderPreview().catch(e=>setApStatus(e.message,'error'));});

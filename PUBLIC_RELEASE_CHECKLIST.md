@@ -1,4 +1,4 @@
-# Public release checklist — MapMotion Studio 0.8.8
+# Public release checklist — MapMotion Studio 0.8.9
 
 - [x] Repository target documented as `Shivam-Studio/mapweb`.
 - [x] Ten starter maps included; amCharts-derived assets retain CC BY 4.0 attribution.
