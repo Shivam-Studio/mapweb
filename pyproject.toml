@@ -1,6 +1,6 @@
 [project]
 name = "mapmotion-studio"
-version = "0.8.3"
+version = "0.8.4"
 description = "SVG map editor and animator export workspace"
 requires-python = ">=3.12,<3.14"
 dependencies = [

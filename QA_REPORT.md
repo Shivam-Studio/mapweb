@@ -1,3 +1,13 @@
+# MapMotion Studio 0.8.4 — QA report
+
+## Storage changes verified
+
+- Browser incremental SHA-256 hashing passes known test vectors.
+- Vercel mode refuses legacy multipart map and satellite uploads rather than saving uploaded bytes to `/tmp`.
+- Mocked Git LFS tests cover upload authorization, LFS pointer commits, map catalog listing, LFS download redirects, satellite overrides for bundled starter maps, and committed pairing metadata.
+- GitHub token and upload key are server-only configuration; the browser uses the short-lived upload action and a separate administrator key.
+- Saved project records remain temporary Vercel SQLite data; this has not been migrated to Git.
+
 # MapMotion Studio 0.8.3 — QA report
 
 ## Automated checks

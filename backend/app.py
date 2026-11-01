@@ -1,16 +1,16 @@
-"""MapMotion Studio FastAPI backend (local Windows + Vercel preview runtime).
+"""MapMotion Studio FastAPI backend (local Windows + Vercel runtime).
 
-Local Windows mode keeps user uploads in the project storage folder and the
-SQLite database under %LOCALAPPDATA% so a running DB is not overwritten by ZIP
-updates. On Vercel, writable files are redirected to /tmp because the function
-filesystem is otherwise read-only. Vercel /tmp is ephemeral; this is a preview
-compatibility mode, not durable cloud storage.
+Local Windows mode keeps local uploads under storage/maps and SQLite under
+%LOCALAPPDATA%. On Vercel, bundled starter maps remain read-only and uploaded
+map assets are transferred directly from the browser to GitHub Git LFS. Only
+small LFS pointers and map metadata are committed through the Vercel API. Saved
+SQLite projects remain temporary on Vercel in this release.
 """
 
 from __future__ import annotations
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from contextlib import contextmanager
@@ -21,8 +21,11 @@ import os
 import re
 import shutil
 import sqlite3
+import time
 import uuid
 import xml.etree.ElementTree as ET
+
+from . import github_storage
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend"
@@ -91,7 +94,7 @@ DB = resolve_database_path()
 for directory in (MAPS, PROJECTS):
     directory.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="MapMotion Studio API", version="0.8.3")
+app = FastAPI(title="MapMotion Studio API", version="0.8.4")
 
 
 @contextmanager
@@ -113,8 +116,8 @@ def db() -> Iterator[sqlite3.Connection]:
 def resolve_map_folder(folder_name: str, *, writable: bool = False) -> Path | None:
     """Resolve a map folder safely from writable or bundled map roots.
 
-    In Vercel mode bundled maps are read-only. An edit/upload operation first
-    copies that map folder into the writable /tmp maps root.
+    Bundled map folders are read-only on Vercel. This helper is used only by
+    local file-backed uploads and legacy local pairing operations.
     """
     if not folder_name or folder_name in {".", ".."} or "/" in folder_name or "\\" in folder_name:
         return None
@@ -215,17 +218,22 @@ def map_row(row: sqlite3.Row) -> dict:
 
 @app.get("/api/health")
 def health() -> dict:
+    github_status = github_storage.config_status()
+    map_storage_mode = "github-lfs" if github_status["configured"] else ("ephemeral" if IS_VERCEL else "local-persistent")
     return {
         "ok": True,
         "product": "MapMotion Studio",
-        "version": "0.8.3",
+        "version": "0.8.4",
         "runtime": "vercel" if IS_VERCEL else "local",
-        "storage_mode": "ephemeral" if IS_VERCEL else "local-persistent",
-        "persistent_storage_configured": not IS_VERCEL,
+        "storage_mode": map_storage_mode,
+        "map_storage_mode": map_storage_mode,
+        "projects_storage_mode": "ephemeral" if IS_VERCEL else "local-persistent",
+        "persistent_storage_configured": bool(github_status["configured"] or not IS_VERCEL),
+        "github_lfs": github_status,
         "warning": (
-            "Vercel preview storage uses temporary /tmp files. Map uploads and saved projects "
-            "are not durable across function restarts or instances. Configure persistent "
-            "database and object storage before production use."
+            "Map assets use GitHub Git LFS. Saved projects still use temporary Vercel SQLite storage."
+            if IS_VERCEL and github_status["configured"]
+            else "Map upload is disabled until GitHub Git LFS is configured. Vercel /tmp is temporary."
             if IS_VERCEL
             else None
         ),
@@ -236,7 +244,29 @@ def health() -> dict:
 def list_maps() -> list[dict]:
     with db() as connection:
         rows = connection.execute("SELECT * FROM maps ORDER BY created_at DESC").fetchall()
-    return [map_row(row) for row in rows]
+    result = [map_row(row) for row in rows]
+    if github_storage.is_configured():
+        try:
+            catalog = github_storage.load_catalog()
+        except github_storage.GitHubStorageError as exc:
+            raise HTTPException(502, str(exc)) from exc
+        existing = {item["id"]: index for index, item in enumerate(result)}
+        for map_id, record in catalog.get("maps", {}).items():
+            item = {
+                "id": map_id,
+                "name": record.get("name") or map_id,
+                "category": record.get("category") or "Custom Uploaded Maps",
+                "folder": record.get("folder") or "",
+                "metadata": record.get("metadata") or {},
+                "created_at": record.get("created_at") or "",
+            }
+            if map_id in existing:
+                result[existing[map_id]]["metadata"] = item["metadata"]
+                result[existing[map_id]]["name"] = item["name"]
+                result[existing[map_id]]["category"] = item["category"]
+            else:
+                result.insert(0, item)
+    return result
 
 
 @app.get("/api/maps/{map_id}/asset/{asset_name}")
@@ -253,6 +283,19 @@ def map_asset(map_id: str, asset_name: str):
     }
     if asset_name not in allowed_assets:
         raise HTTPException(404, "Asset not found")
+
+    # User-uploaded assets are Git LFS objects. Redirect the browser to the
+    # short-lived download URL so large files never pass through Vercel.
+    if github_storage.is_configured():
+        try:
+            record = github_storage.load_catalog().get("maps", {}).get(map_id)
+            asset = (record or {}).get("assets", {}).get(asset_name)
+            if asset:
+                action = github_storage.get_download_action(asset["oid"], int(asset["size"]))
+                return RedirectResponse(action["href"], status_code=307)
+        except github_storage.GitHubStorageError as exc:
+            raise HTTPException(502, str(exc)) from exc
+
     with db() as connection:
         row = connection.execute("SELECT folder FROM maps WHERE id=?", (map_id,)).fetchone()
     if not row:
@@ -266,6 +309,184 @@ def map_asset(map_id: str, asset_name: str):
     return FileResponse(path, media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream")
 
 
+def _github_error(exc: Exception) -> HTTPException:
+    return HTTPException(503, str(exc))
+
+
+def _check_map_upload_key(value: str | None) -> None:
+    if not github_storage.is_configured():
+        raise HTTPException(503, "GitHub Git LFS is not configured. Add the required Vercel environment variables and redeploy.")
+    try:
+        github_storage.verify_upload_key(value)
+    except github_storage.GitHubStorageError as exc:
+        raise HTTPException(403, str(exc)) from exc
+
+
+def _map_id_is_safe(map_id: str) -> bool:
+    return bool(re.fullmatch(r"[a-z0-9][a-z0-9_-]{2,90}", map_id or ""))
+
+
+def _base_map_record(map_id: str) -> dict | None:
+    with db() as connection:
+        row = connection.execute("SELECT * FROM maps WHERE id=?", (map_id,)).fetchone()
+    if not row:
+        return None
+    base = map_row(row)
+    return {
+        "id": map_id,
+        "name": base["name"],
+        "category": base["category"],
+        "folder": f"storage/maps/user-uploads/_overrides/{map_id}",
+        "base_map_id": map_id,
+        "metadata": base["metadata"],
+        "assets": {},
+        "created_at": base.get("created_at") or "",
+    }
+
+
+@app.post("/api/maps/upload-session")
+def prepare_github_map_upload(payload: dict, x_map_upload_key: str | None = Header(None)) -> dict:
+    """Authorize direct browser-to-Git-LFS uploads for a new map."""
+    _check_map_upload_key(x_map_upload_key)
+    name = str(payload.get("name") or "").strip()[:120]
+    if not name:
+        raise HTTPException(400, "Map name is required")
+    raw_assets = payload.get("assets")
+    if not isinstance(raw_assets, list) or not raw_assets or len(raw_assets) > 2:
+        raise HTTPException(400, "Select an SVG and optionally one satellite image")
+    try:
+        assets = [github_storage.validate_lfs_asset(item, {"world-india.svg", "satellite.png", "satellite.jpg", "satellite.webp"}) for item in raw_assets]
+        if sum(1 for item in assets if item["filename"] == "world-india.svg") != 1:
+            raise github_storage.GitHubStorageError("Exactly one world-india.svg boundary asset is required.")
+        if len({item["filename"] for item in assets}) != len(assets):
+            raise github_storage.GitHubStorageError("Duplicate asset names were submitted.")
+        uploads = github_storage.authorize_uploads(assets)
+    except github_storage.GitHubStorageError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    map_id = safe_name(name) + "-" + uuid.uuid4().hex[:8]
+    return {
+        "ok": True,
+        "map_id": map_id,
+        "uploads": uploads,
+        "max_file_bytes": github_storage.MAX_FILE_BYTES,
+        "storage": "github-lfs-direct",
+    }
+
+
+@app.post("/api/maps/commit")
+def commit_github_map_upload(payload: dict, x_map_upload_key: str | None = Header(None)) -> dict:
+    """Commit only small Git LFS pointers and metadata to the configured branch."""
+    _check_map_upload_key(x_map_upload_key)
+    map_id = str(payload.get("map_id") or "")
+    if not _map_id_is_safe(map_id):
+        raise HTTPException(400, "Invalid map upload session")
+    name = str(payload.get("name") or "").strip()[:120]
+    if not name:
+        raise HTTPException(400, "Map name is required")
+    raw_assets = payload.get("assets")
+    if not isinstance(raw_assets, list) or not raw_assets or len(raw_assets) > 2:
+        raise HTTPException(400, "Map upload is missing its asset manifest")
+    try:
+        assets = [github_storage.validate_lfs_asset(item, {"world-india.svg", "satellite.png", "satellite.jpg", "satellite.webp"}) for item in raw_assets]
+        if sum(1 for item in assets if item["filename"] == "world-india.svg") != 1:
+            raise github_storage.GitHubStorageError("Exactly one world-india.svg boundary asset is required.")
+        if len({item["filename"] for item in assets}) != len(assets):
+            raise github_storage.GitHubStorageError("Duplicate asset names were submitted.")
+        github_storage.verify_lfs_objects(assets)
+        folder = f"storage/maps/user-uploads/{map_id}"
+        asset_index = {}
+        for asset in assets:
+            path = github_storage.repo_asset_path(folder, asset["filename"])
+            pointer = github_storage.pointer_content(asset["oid"], asset["size"])
+            github_storage.write_repo_file(path, pointer, f"Add MapMotion LFS asset: {map_id}/{asset['filename']}")
+            asset_index[asset["filename"]] = {"oid": asset["oid"], "size": asset["size"], "path": path}
+        satellite_name = next((item["filename"] for item in assets if item["filename"].startswith("satellite.")), None)
+        metadata = {
+            "id": map_id,
+            "name": name,
+            "category": str(payload.get("category") or "Custom Uploaded Maps")[:80],
+            "projection": str(payload.get("projection") or "Unknown")[:120],
+            "coverage": str(payload.get("coverage") or "Unknown")[:180],
+            "svg": "world-india.svg",
+            "satellite": satellite_name,
+            "thumbnail": None,
+            "source": str(payload.get("source") or "uploaded-map.svg")[:180],
+            "license": "Not specified — admin review required",
+            "pairing_status": "unverified" if satellite_name else "unpaired",
+            "path_count": max(0, min(int(payload.get("path_count") or 0), 1000000)),
+            "storage_backend": "github-lfs",
+        }
+        record = {
+            "id": map_id,
+            "name": name,
+            "category": metadata["category"],
+            "folder": folder,
+            "metadata": metadata,
+            "assets": asset_index,
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        metadata_bytes = json.dumps(metadata, ensure_ascii=False, indent=2).encode("utf-8")
+        github_storage.write_repo_file(f"{folder}/metadata.json", metadata_bytes, f"Add MapMotion map metadata: {map_id}")
+        github_storage.save_catalog_record(record)
+    except (github_storage.GitHubStorageError, ValueError, TypeError) as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return {"ok": True, "map": metadata, "storage": "github-lfs"}
+
+
+@app.post("/api/maps/{map_id}/satellite/upload-session")
+def prepare_github_satellite_upload(map_id: str, payload: dict, x_map_upload_key: str | None = Header(None)) -> dict:
+    _check_map_upload_key(x_map_upload_key)
+    if not _map_id_is_safe(map_id):
+        raise HTTPException(400, "Invalid map ID")
+    raw_asset = dict(payload or {})
+    filename = str(raw_asset.get("filename") or "")
+    if filename.endswith(".jpeg"):
+        filename = "satellite.jpg"
+    raw_asset["filename"] = filename
+    try:
+        asset = github_storage.validate_lfs_asset(raw_asset, {"satellite.png", "satellite.jpg", "satellite.webp"})
+        catalog = github_storage.load_catalog(force=True)
+        record = catalog.get("maps", {}).get(map_id) or _base_map_record(map_id)
+        if not record:
+            raise HTTPException(404, "Map not found")
+        upload = github_storage.authorize_uploads([asset])[0]
+    except github_storage.GitHubStorageError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True, "map_id": map_id, "upload": upload, "max_file_bytes": github_storage.MAX_FILE_BYTES}
+
+
+@app.post("/api/maps/{map_id}/satellite/commit")
+def commit_github_satellite_upload(map_id: str, payload: dict, x_map_upload_key: str | None = Header(None)) -> dict:
+    _check_map_upload_key(x_map_upload_key)
+    if not _map_id_is_safe(map_id):
+        raise HTTPException(400, "Invalid map ID")
+    try:
+        asset = github_storage.validate_lfs_asset(payload or {}, {"satellite.png", "satellite.jpg", "satellite.webp"})
+        github_storage.verify_lfs_objects([asset])
+        catalog = github_storage.load_catalog(force=True)
+        record = catalog.get("maps", {}).get(map_id) or _base_map_record(map_id)
+        if not record:
+            raise HTTPException(404, "Map not found")
+        folder = record["folder"]
+        path = github_storage.repo_asset_path(folder, asset["filename"])
+        github_storage.write_repo_file(path, github_storage.pointer_content(asset["oid"], asset["size"]), f"Add MapMotion satellite LFS asset: {map_id}")
+        record.setdefault("assets", {})[asset["filename"]] = {"oid": asset["oid"], "size": asset["size"], "path": path}
+        for key in list(record["assets"]):
+            if key.startswith("satellite.") and key != asset["filename"]:
+                del record["assets"][key]
+        metadata = record.get("metadata") or {}
+        metadata["satellite"] = asset["filename"]
+        metadata["pairing_status"] = "unverified"
+        metadata["storage_backend"] = "github-lfs"
+        record["metadata"] = metadata
+        github_storage.write_repo_file(f"{folder}/metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2).encode("utf-8"), f"Update MapMotion map metadata: {map_id}")
+        github_storage.save_catalog_record(record)
+    except (github_storage.GitHubStorageError, ValueError, TypeError) as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return {"ok": True, "metadata": metadata, "storage": "github-lfs"}
+
+
 @app.post("/api/maps")
 async def create_map(
     name: str = Form(...),
@@ -275,6 +496,8 @@ async def create_map(
     svg: UploadFile = File(...),
     satellite: UploadFile | None = File(None),
 ):
+    if IS_VERCEL:
+        raise HTTPException(409, "Vercel uploads must use the Git LFS direct-upload workflow. Open the updated MapMotion Studio release.")
     if not (svg.filename or "").lower().endswith(".svg"):
         raise HTTPException(400, "Map boundary file must be SVG")
     name = (name or "").strip()[:120]
@@ -354,6 +577,8 @@ async def create_map(
 
 @app.post("/api/maps/{map_id}/satellite")
 async def upload_satellite(map_id: str, satellite: UploadFile = File(...)):
+    if IS_VERCEL:
+        raise HTTPException(409, "Vercel satellite uploads must use the Git LFS direct-upload workflow. Open the updated MapMotion Studio release.")
     extension = Path(satellite.filename or "").suffix.lower()
     if extension not in {".png", ".jpg", ".jpeg", ".webp"}:
         raise HTTPException(400, "Satellite image must be PNG, JPG or WebP")
@@ -391,7 +616,35 @@ def verify_pair(
     x: float = Form(0),
     y: float = Form(0),
     opacity: float = Form(55),
+    x_map_upload_key: str | None = Header(None),
 ):
+    if not (10 <= scale <= 300 and -2000 <= x <= 2000 and -2000 <= y <= 2000 and 0 <= opacity <= 100):
+        raise HTTPException(400, "Alignment values are outside supported limits")
+
+    if github_storage.is_configured():
+        _check_map_upload_key(x_map_upload_key)
+        try:
+            catalog = github_storage.load_catalog(force=True)
+            record = catalog.get("maps", {}).get(map_id) or _base_map_record(map_id)
+            if not record:
+                raise HTTPException(404, "Map not found")
+            metadata = record.get("metadata") or {}
+            if not metadata.get("satellite"):
+                raise HTTPException(400, "Upload a satellite image before verifying alignment")
+            metadata["pairing_status"] = "verified" if verified else "unverified"
+            metadata["alignment_notes"] = notes[:4000]
+            metadata["alignment"] = {"scale": scale, "x": x, "y": y, "opacity": opacity}
+            metadata["storage_backend"] = "github-lfs"
+            record["metadata"] = metadata
+            folder = record["folder"]
+            github_storage.write_repo_file(f"{folder}/metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2).encode("utf-8"), f"Update MapMotion pairing metadata: {map_id}")
+            github_storage.save_catalog_record(record)
+        except github_storage.GitHubStorageError as exc:
+            raise HTTPException(502, str(exc)) from exc
+        return {"ok": True, "metadata": metadata, "storage": "github-lfs"}
+
+    if IS_VERCEL:
+        raise HTTPException(503, "GitHub Git LFS is not configured. Map metadata cannot be saved durably.")
     with db() as connection:
         row = connection.execute("SELECT * FROM maps WHERE id=?", (map_id,)).fetchone()
         if not row:
@@ -399,17 +652,13 @@ def verify_pair(
         metadata = json.loads(row["metadata"])
         if not metadata.get("satellite"):
             raise HTTPException(400, "Upload a satellite image before verifying alignment")
-        if not (10 <= scale <= 300 and -2000 <= x <= 2000 and -2000 <= y <= 2000 and 0 <= opacity <= 100):
-            raise HTTPException(400, "Alignment values are outside supported limits")
         folder = resolve_map_folder(row["folder"], writable=True)
         if folder is None:
             raise HTTPException(404, "Map storage folder not found")
         metadata["pairing_status"] = "verified" if verified else "unverified"
-        metadata["alignment_notes"] = notes
+        metadata["alignment_notes"] = notes[:4000]
         metadata["alignment"] = {"scale": scale, "x": x, "y": y, "opacity": opacity}
-        connection.execute(
-            "UPDATE maps SET metadata=? WHERE id=?", (json.dumps(metadata), map_id)
-        )
+        connection.execute("UPDATE maps SET metadata=? WHERE id=?", (json.dumps(metadata), map_id))
         (folder / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     return {"ok": True, "metadata": metadata}
 

@@ -1,4 +1,4 @@
-"""Smoke-test the FastAPI app in Vercel-style temporary-storage mode.
+"""Smoke-test Vercel mode with GitHub Git LFS not configured.
 
 Run: python qa_vercel_smoke.py
 Requires: pip install -r requirements-dev.txt
@@ -37,7 +37,7 @@ def check(condition: bool, message: str) -> None:
 def main() -> None:
     temp_root = Path(TEMP_DIR.name).resolve()
     check(DB.parent == temp_root, "SQLite DB must use the configured temporary directory")
-    check(MAPS.parent == temp_root, "Uploaded maps must use the configured temporary directory")
+    check(MAPS.parent == temp_root, "Writable scratch-map root must stay outside the read-only deployment source")
     check(DB.parent != ROOT, "Vercel smoke test must not write the DB into the deployment source")
 
     tiny_png = base64.b64decode(
@@ -53,16 +53,18 @@ def main() -> None:
         js = client.get("/assets/app.js")
         css = client.get("/assets/styles.css")
         check(js.status_code == 200 and "cameraViewBoxFromState" in js.text, "Frontend JS asset must load")
-        check("VERCEL_UPLOAD_SAFE_BYTES=4*1024*1024" in js.text, "Hosted-preview upload size guard must be present")
+        check("uploadNewMapToGithub" in js.text and "putFileToLfs" in js.text, "Browser-to-GitHub LFS upload flow must be present")
+        check("VERCEL_UPLOAD_SAFE_BYTES" not in js.text, "The old Vercel 4 MB multipart upload guard must be removed")
         check(css.status_code == 200 and ".shell" in css.text, "Frontend CSS asset must load")
 
         health = client.get("/api/health")
         check(health.status_code == 200, "Health endpoint must return 200")
         health_data = health.json()
         check(health_data.get("ok") is True, "Health endpoint must report ok")
-        check(health_data.get("version") == "0.8.3", "Health endpoint must report 0.8.3")
-        check(health_data.get("storage_mode") == "ephemeral", "Vercel mode must clearly report ephemeral storage")
-        check(health_data.get("persistent_storage_configured") is False, "Vercel preview must not claim persistence")
+        check(health_data.get("version") == "0.8.4", "Health endpoint must report 0.8.4")
+        check(health_data.get("storage_mode") == "ephemeral", "Vercel without GitHub credentials must report missing durable map storage")
+        check(health_data.get("map_storage_mode") == "ephemeral", "Map storage must remain marked ephemeral until GitHub LFS is configured")
+        check(health_data.get("persistent_storage_configured") is False, "Vercel preview must not claim map persistence without GitHub LFS")
 
         initial_maps = client.get("/api/maps")
         check(initial_maps.status_code == 200, "Bundled map library endpoint must load")
@@ -100,43 +102,28 @@ def main() -> None:
             check(thumbnail.status_code == 200 and thumbnail.content.startswith(b"\x89PNG"), f"{starter_id} thumbnail must be served")
         bundled_asset = client.get("/api/maps/qa-bundled-map/asset/world-india.svg")
         check(bundled_asset.status_code == 200, "Bundled SVG must be readable from the deployment source")
+        # Vercel must never silently fall back to temporary map-file writes.
         bundled_upload = client.post(
             "/api/maps/qa-bundled-map/satellite",
             files={"satellite": ("qa.png", tiny_png, "image/png")},
         )
-        check(bundled_upload.status_code == 200, "Updating a bundled map must copy it into writable temporary storage")
-        check((MAPS / "__qa-bundled-fixture__" / "metadata.json").is_file(), "Copy-on-write map folder must be present under the temporary directory")
+        check(bundled_upload.status_code == 409, "Legacy multipart satellite uploads must be rejected on Vercel")
 
         uploaded = client.post(
             "/api/maps",
             data={"name": "QA Test Map", "category": "Custom Uploaded Maps"},
             files={"svg": ("qa-map.svg", svg, "image/svg+xml")},
         )
-        check(uploaded.status_code == 200, f"SVG map upload must succeed: {uploaded.text}")
-        map_data = uploaded.json()["map"]
-        map_id = map_data["id"]
-
-        listed = client.get("/api/maps")
-        check(listed.status_code == 200 and any(item["id"] == map_id for item in listed.json()), "Uploaded map must appear in library")
-
-        asset = client.get(f"/api/maps/{map_id}/asset/world-india.svg")
-        check(asset.status_code == 200 and b"<svg" in asset.content, "Uploaded SVG asset must be downloadable")
-
-        satellite = client.post(
-            f"/api/maps/{map_id}/satellite",
-            files={"satellite": ("qa.png", tiny_png, "image/png")},
+        check(uploaded.status_code == 409, "Legacy multipart SVG uploads must be rejected on Vercel")
+        session = client.post(
+            "/api/maps/upload-session",
+            json={"name": "QA Test Map", "assets": [{"filename": "world-india.svg", "oid": "a" * 64, "size": len(svg)}]},
         )
-        check(satellite.status_code == 200, f"Satellite upload must succeed: {satellite.text}")
-
-        verified = client.post(
-            f"/api/maps/{map_id}/verify-pair",
-            data={"verified": "true", "notes": "QA check", "scale": "100", "x": "0", "y": "0", "opacity": "55"},
-        )
-        check(verified.status_code == 200 and verified.json()["metadata"]["pairing_status"] == "verified", "Pair verification must update metadata")
+        check(session.status_code == 503, "Direct LFS upload must require server-side GitHub configuration and upload key")
 
         saved = client.post(
             "/api/projects",
-            json={"name": "QA Project", "map_id": map_id, "data": {"view": "world", "zoom": 1}},
+            json={"name": "QA Project", "map_id": "world-india", "data": {"view": "world", "zoom": 1}},
         )
         check(saved.status_code == 200, f"Project save must succeed: {saved.text}")
         project_id = saved.json()["id"]
@@ -145,16 +132,10 @@ def main() -> None:
         deleted = client.delete(f"/api/projects/{project_id}")
         check(deleted.status_code == 200 and deleted.json().get("ok") is True, "Project delete must succeed")
 
-        bad_svg = client.post(
-            "/api/maps",
-            data={"name": "Unsafe"},
-            files={"svg": ("unsafe.svg", b'<svg><script>alert(1)</script></svg>', "image/svg+xml")},
-        )
-        check(bad_svg.status_code == 400, "Unsafe active SVG content must be rejected")
 
-    print("PASS: Vercel-mode home page, static assets, health, all nine starter-map registrations, SVG/physical/texture/thumbnail asset routes, bundled-map copy-on-write, SVG upload, satellite upload, pair verification, project CRUD and SVG safety.")
-    print("PASS: SQLite and uploaded content are routed to the configured temporary data directory.")
-    print("NOTE: This validates temporary preview storage only; it does not test durable cloud persistence.")
+    print("PASS: Vercel-mode home page, static assets, health, all nine starter-map registrations, SVG/physical/texture/thumbnail asset routes, and project CRUD.")
+    print("PASS: Vercel refuses legacy multipart map uploads and refuses direct LFS uploads until server-side GitHub credentials are configured.")
+    print("NOTE: This smoke test does not connect to a real GitHub repository; see qa_github_lfs.py for mocked Git LFS route tests.")
 
 
 if __name__ == "__main__":

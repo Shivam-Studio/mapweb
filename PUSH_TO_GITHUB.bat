@@ -1,12 +1,12 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title MapMotion Studio - 0.8.3 Export Fix Push
+title MapMotion Studio - 0.8.4 Export Fix Push
 
 set "REMOTE_URL=https://github.com/Shivam-Studio/mapweb.git"
 
 echo ==============================================================
-echo   MAPMOTION STUDIO 0.8.3 - SAFE EXPORT FIX PUSH
+echo   MAPMOTION STUDIO 0.8.4 - SAFE EXPORT FIX PUSH
 echo   Target: Shivam-Studio/mapweb ^(main^)
 echo ==============================================================
 echo.
@@ -70,8 +70,8 @@ if errorlevel 1 goto :failed
 
 git diff --cached --quiet
 if errorlevel 1 (
-  echo Creating export and selection colour fix commit...
-  git commit -m "Fix selection colours and camera/country exports"
+  echo Creating MapMotion Studio 0.8.4 Git LFS storage commit...
+  git commit -m "Add GitHub LFS-backed map upload storage"
   if errorlevel 1 goto :failed
 ) else (
   echo No new local changes to commit.

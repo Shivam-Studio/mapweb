@@ -5,8 +5,127 @@ function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show')
 function page(name, options={}){document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===`page-${name}`));document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.page===name));$('pageTitle').textContent=({dashboard:'Dashboard',library:'Map Library',editor:'Map Editor',pairing:'Image Pairing',projects:'Saved Projects'})[name]||'MapMotion Studio';if(options.load===false)return;if(name==='library')renderLibrary();if(name==='editor'&&(options.reload||state.loadedSvgMapId!==state.mapId||!$('liveMap')))loadEditor().catch(e=>toast(`Could not load editor: ${e.message}`));if(name==='pairing')renderPairing().catch(e=>toast(`Could not load pairing: ${e.message}`));if(name==='projects')loadProjects().catch(e=>toast(`Could not load projects: ${e.message}`));}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>page(b.dataset.page)));
 let isVercelPreview=false;
-const VERCEL_UPLOAD_SAFE_BYTES=4*1024*1024;
-async function init(){try{const health=await api('/api/health');isVercelPreview=health.runtime==='vercel';const chip=document.querySelector('.status-chip');if(chip){if(health.storage_mode==='ephemeral'){chip.textContent='Preview · temporary storage';chip.classList.add('connected','temporary');const notice=$('deploymentWarning');if(notice)notice.hidden=false;const projectNote=$('projectsStorageNote');if(projectNote)projectNote.textContent='Vercel preview: saved projects use temporary storage and may disappear after a function restart. Configure persistent database storage before production use.';}else{chip.innerHTML='<i></i> API connected';chip.classList.add('connected');const projectNote=$('projectsStorageNote');if(projectNote)projectNote.textContent='Projects are stored in the local SQLite database on this computer.'}}const uploadNote=$('deploymentUploadNote');if(uploadNote&&isVercelPreview)uploadNote.hidden=false;const satelliteNote=$('satelliteUploadNote');if(satelliteNote&&isVercelPreview)satelliteNote.textContent='Vercel preview: keep each upload under 4 MB. Larger files need direct object-storage uploads.';await refreshMaps();}catch(e){const chip=document.querySelector('.status-chip');if(chip){chip.textContent='API disconnected';chip.classList.add('disconnected')}const count=$('mapCount');if(count)count.textContent='API unavailable';const featured=$('featuredMap');if(featured)featured.innerHTML='<div class="panel empty-library"><b>MapMotion API is not connected</b><p>This deployment must run the FastAPI application from the repository root. Reconnect the Vercel project to Shivam-Studio/mapweb and set Root Directory to ./.</p></div>';const grid=$('mapGrid');if(grid)grid.innerHTML='<div class="panel empty-library"><b>Map library unavailable</b><p>Waiting for the FastAPI backend.</p></div>';const canvas=$('mapCanvas');if(canvas)canvas.innerHTML='<div class="map-loading">Backend unavailable. This is not a frontend-only deployment; open the repository root as a FastAPI project.</div>';toast(`API unavailable: ${e.message}. Check the Vercel FastAPI deployment.`);}}
+let isGithubLfsStorage=false;
+let maxLfsFileBytes=2*1024*1024*1024;
+let mapUploadKey='';
+async function init(){try{
+  const health=await api('/api/health');
+  isVercelPreview=health.runtime==='vercel';
+  isGithubLfsStorage=health.map_storage_mode==='github-lfs';
+  maxLfsFileBytes=Number(health.github_lfs?.max_file_bytes)||maxLfsFileBytes;
+  const chip=document.querySelector('.status-chip');
+  if(chip){
+    if(isGithubLfsStorage){chip.textContent='Git-backed map storage';chip.classList.add('connected');}
+    else if(health.storage_mode==='ephemeral'){chip.textContent='Preview · maps not configured';chip.classList.add('connected','temporary');}
+    else{chip.innerHTML='<i></i> API connected';chip.classList.add('connected');}
+  }
+  const deploymentWarning=$('deploymentWarning');
+  if(deploymentWarning&&isVercelPreview&&!isGithubLfsStorage){deploymentWarning.hidden=false;deploymentWarning.textContent='GitHub Git LFS is not configured. Map uploads are disabled on this deployment; configure the GitHub storage environment variables before uploading.';}
+  const projectNote=$('projectsStorageNote');
+  if(projectNote){
+    projectNote.textContent=health.projects_storage_mode==='ephemeral'
+      ?'Map assets are stored in GitHub LFS. Saved projects still use temporary Vercel SQLite storage and may disappear after a function restart.'
+      :'Projects are stored in the local SQLite database on this computer.';
+  }
+  const uploadNote=$('deploymentUploadNote');
+  if(uploadNote){
+    uploadNote.hidden=!(isVercelPreview||isGithubLfsStorage);
+    uploadNote.textContent=isGithubLfsStorage
+      ?`Git-backed storage: map files upload directly from your browser to GitHub LFS, not through Vercel. Per-file limit for this configuration: ${formatBytes(maxLfsFileBytes)}. GitHub plan quotas still apply.`
+      :'Map uploads are unavailable until GitHub Git LFS storage is configured in Vercel.';
+  }
+  const satelliteNote=$('satelliteUploadNote');
+  if(satelliteNote&&isGithubLfsStorage)satelliteNote.textContent=`GitHub LFS direct upload · max ${formatBytes(maxLfsFileBytes)} per file`;
+  if(satelliteNote&&isVercelPreview&&!isGithubLfsStorage)satelliteNote.textContent='GitHub Git LFS storage is not configured; uploads are disabled.';
+  await refreshMaps();
+}catch(e){const chip=document.querySelector('.status-chip');if(chip){chip.textContent='API disconnected';chip.classList.add('disconnected')}const count=$('mapCount');if(count)count.textContent='API unavailable';const featured=$('featuredMap');if(featured)featured.innerHTML='<div class="panel empty-library"><b>MapMotion API is not connected</b><p>This deployment must run the FastAPI application from the repository root. Reconnect the Vercel project to Shivam-Studio/mapweb and set Root Directory to ./.</p></div>';const grid=$('mapGrid');if(grid)grid.innerHTML='<div class="panel empty-library"><b>Map library unavailable</b><p>Waiting for the FastAPI backend.</p></div>';const canvas=$('mapCanvas');if(canvas)canvas.innerHTML='<div class="map-loading">Backend unavailable. This is not a frontend-only deployment; open the repository root as a FastAPI project.</div>';toast(`API unavailable: ${e.message}. Check the Vercel FastAPI deployment.`);}}
+function formatBytes(bytes){if(!Number.isFinite(bytes)||bytes<=0)return 'unknown';const units=['B','KB','MB','GB'];let n=bytes,u=0;while(n>=1024&&u<units.length-1){n/=1024;u++;}return `${n.toFixed(u===0?0:1)} ${units[u]}`;}
+function requireMapUploadKey(){if(mapUploadKey)return mapUploadKey;const value=window.prompt('Enter the MapMotion Git upload key provided by the administrator:');if(!value)throw new Error('Upload cancelled: Git upload key is required.');mapUploadKey=value;return mapUploadKey;}
+async function githubUploadApi(url,payload){const key=requireMapUploadKey();return api(url,{method:'POST',headers:{'Content-Type':'application/json','X-Map-Upload-Key':key},body:JSON.stringify(payload)});}
+async function hashBrowserFile(file){
+  if(!window.MapMotionSha256)throw new Error('The secure file-hashing module did not load. Refresh the page and try again.');
+  const hash=new window.MapMotionSha256();
+  const chunkSize=4*1024*1024;
+  for(let offset=0;offset<file.size;offset+=chunkSize){
+    const chunk=await file.slice(offset,Math.min(file.size,offset+chunkSize)).arrayBuffer();
+    hash.update(new Uint8Array(chunk));
+    if(file.size>chunkSize)toast(`Preparing ${file.name}: ${Math.min(100,Math.round((offset+chunk.byteLength)/file.size*100))}%`);
+  }
+  return hash.hex();
+}
+async function validateSvgUpload(file){
+  if(!(file instanceof File)||!file.name.toLowerCase().endsWith('.svg'))throw new Error('Map boundary file must be an SVG.');
+  if(file.size<=0||file.size>maxLfsFileBytes)throw new Error(`SVG size must be between 1 byte and ${formatBytes(maxLfsFileBytes)}.`);
+  const text=await file.text();
+  const doc=new DOMParser().parseFromString(text,'image/svg+xml');
+  const root=doc.documentElement;
+  if(!root||root.localName.toLowerCase()!=='svg'||doc.querySelector('parsererror'))throw new Error('SVG XML is malformed or its root element is not <svg>.');
+  for(const element of doc.querySelectorAll('*')){
+    const tag=element.localName.toLowerCase();
+    if(tag==='script'||tag==='foreignobject')throw new Error('SVG contains unsupported active content.');
+    for(const attribute of [...element.attributes]){
+      const key=attribute.name.toLowerCase(),value=attribute.value||'';
+      if(/^on[a-z]+$/.test(key))throw new Error('SVG contains an event-handler attribute.');
+      if(key.endsWith('href')&&value&&!value.startsWith('data:image/')&&!value.startsWith('#'))throw new Error('External SVG references are not accepted; embed linked assets first.');
+      if(key==='style'&&/url\(\s*["']?(?:https?:|\/\/|file:|javascript:)/i.test(value))throw new Error('SVG contains an external style reference.');
+    }
+  }
+  return {text,pathCount:(text.match(/<(?:path|polygon|rect|circle)\b/gi)||[]).length};
+}
+async function validateRasterUpload(file){
+  if(!(file instanceof File)||file.size<=0||file.size>maxLfsFileBytes)throw new Error(`Image size must be between 1 byte and ${formatBytes(maxLfsFileBytes)}.`);
+  const ext=file.name.toLowerCase().split('.').pop();
+  if(!['png','jpg','jpeg','webp'].includes(ext))throw new Error('Satellite image must be PNG, JPG or WebP.');
+  const head=new Uint8Array(await file.slice(0,16).arrayBuffer());
+  const png=head.length>=8&&head[0]===0x89&&head[1]===0x50&&head[2]===0x4e&&head[3]===0x47&&head[4]===0x0d&&head[5]===0x0a&&head[6]===0x1a&&head[7]===0x0a;
+  const jpg=head.length>=3&&head[0]===0xff&&head[1]===0xd8&&head[2]===0xff;
+  const webp=head.length>=12&&String.fromCharCode(...head.slice(0,4))==='RIFF'&&String.fromCharCode(...head.slice(8,12))==='WEBP';
+  if(!(ext==='png'?png:ext==='jpg'||ext==='jpeg'?jpg:webp))throw new Error('Image content does not match its file extension.');
+  return ext==='jpeg'?'jpg':ext;
+}
+function putFileToLfs(file,action){
+  if(!action?.href)return Promise.resolve();
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open('PUT',action.href,true);
+    Object.entries(action.header||{}).forEach(([key,value])=>xhr.setRequestHeader(key,value));
+    xhr.upload.onprogress=event=>{if(event.lengthComputable)toast(`Uploading ${file.name}: ${Math.round(event.loaded/event.total*100)}%`);};
+    xhr.onload=()=>{if(xhr.status>=200&&xhr.status<300)resolve();else reject(new Error(`GitHub LFS upload failed (${xhr.status}): ${xhr.responseText||'Upload rejected'}`));};
+    xhr.onerror=()=>reject(new Error('Could not reach GitHub LFS upload storage. Check the connection or browser CORS/network restrictions and retry.'));
+    xhr.ontimeout=()=>reject(new Error('GitHub LFS upload timed out. Retry the upload.'));
+    xhr.timeout=0;
+    xhr.send(file);
+  });
+}
+async function verifyLfsUpload(verify,oid,size){
+  if(!verify?.href)return;
+  const headers={Accept:'application/vnd.git-lfs+json','Content-Type':'application/vnd.git-lfs+json',...(verify.header||{})};
+  const response=await fetch(verify.href,{method:'POST',headers,body:JSON.stringify({oid,size})});
+  if(!response.ok)throw new Error(`GitHub LFS could not verify the uploaded object (${response.status}).`);
+}
+async function uploadNewMapToGithub(formData){
+  const svgFile=formData.get('svg');
+  const satelliteFile=formData.get('satellite');
+  const svgCheck=await validateSvgUpload(svgFile);
+  const fileItems=[{file:svgFile,filename:'world-india.svg'}];
+  let satelliteExtension=null;
+  if(satelliteFile instanceof File&&satelliteFile.size>0){satelliteExtension=await validateRasterUpload(satelliteFile);fileItems.push({file:satelliteFile,filename:`satellite.${satelliteExtension}`});}
+  const assets=[];
+  for(const item of fileItems){const oid=await hashBrowserFile(item.file);assets.push({filename:item.filename,oid,size:item.file.size});}
+  const metadata={name:String(formData.get('name')||''),category:String(formData.get('category')||'Custom Uploaded Maps'),projection:String(formData.get('projection')||'Unknown'),coverage:String(formData.get('coverage')||'Unknown'),source:svgFile.name,path_count:svgCheck.pathCount,assets};
+  const session=await githubUploadApi('/api/maps/upload-session',metadata);
+  for(const item of session.uploads){const source=fileItems.find(entry=>entry.filename===item.filename);if(!source)throw new Error(`Upload manifest mismatch for ${item.filename}.`);if(!item.already_uploaded){toast(`Uploading ${source.file.name} to GitHub LFS…`);await putFileToLfs(source.file,item.upload);await verifyLfsUpload(item.verify,item.oid,item.size);}}
+  toast('Committing map pointers and metadata to GitHub…');
+  return githubUploadApi('/api/maps/commit',{map_id:session.map_id,...metadata});
+}
+async function uploadSatelliteToGithub(mapId,file){
+  const extension=await validateRasterUpload(file);
+  const asset={filename:`satellite.${extension}`,size:file.size,oid:await hashBrowserFile(file)};
+  const session=await githubUploadApi(`/api/maps/${encodeURIComponent(mapId)}/satellite/upload-session`,asset);
+  if(!session.upload.already_uploaded){toast(`Uploading ${file.name} to GitHub LFS…`);await putFileToLfs(file,session.upload.upload);await verifyLfsUpload(session.upload.verify,asset.oid,asset.size);}
+  toast('Saving satellite image pointer in GitHub…');
+  return githubUploadApi(`/api/maps/${encodeURIComponent(mapId)}/satellite/commit`,asset);
+}
 function preferredMapId(){return state.maps.find(m=>m.id==='world-map-6c3644')?.id||state.maps.find(m=>m.id==='world-india')?.id||state.maps[0]?.id||''}
 function preferredViewForMap(id){return state.maps.find(m=>m.id===id)?.metadata?.recommended_view||'world'}
 async function refreshMaps(){state.maps=await api('/api/maps');if(!state.mapId||!state.maps.some(m=>m.id===state.mapId))state.mapId=preferredMapId();$('mapCount').textContent=`${state.maps.length} map asset${state.maps.length===1?'':'s'}`;const ws=document.querySelector('.sidebar-bottom small');if(ws)ws.textContent=`${state.maps.filter(m=>m.metadata?.starter_asset).length} starter maps · hosted workspace`;renderFeatured();renderLibrary();fillEditorMap();if(!state.mapId){$('canvasTitle').textContent='No map loaded';$('selectionCount').textContent='Upload an SVG to begin';$('sourceCount').textContent='0 paths';$('mapCanvas').innerHTML='<div class="map-loading">No map assets are bundled in this deployment. Open Map Library → Upload map to add an SVG you own or are licensed to use.</div>';}}
@@ -547,12 +666,12 @@ window.reopenProject=async id=>{
 window.removeProject=async id=>{if(!confirm('Delete this saved project?'))return;await api(`/api/projects/${id}`,{method:'DELETE'});loadProjects()};
 async function renderPairing(){const m=state.maps.find(x=>x.id===state.mapId)||state.maps[0];if(!m)return;state.mapId=m.id;state.metadata=m.metadata;const saved=m.metadata.alignment||{};[['imageOpacity',saved.opacity??55],['imageScale',saved.scale??100],['imageX',saved.x??0],['imageY',saved.y??0]].forEach(([id,v])=>$(id).value=v);syncAlign();$('pairMapName').textContent=m.name;$('pairStatus').textContent=m.metadata.pairing_status||'unpaired';$('pairPreview').innerHTML='<div class="empty-preview">Upload a satellite image to preview the pair.</div>';if(!state.svgText||state.loadedSvgMapId!==m.id){const r=await fetch(`/api/maps/${m.id}/asset/world-india.svg`);if(r.ok){state.svgText=await r.text();state.loadedSvgMapId=m.id;state.sourceSvg=new DOMParser().parseFromString(state.svgText,'image/svg+xml').documentElement;}}if(m.metadata.satellite)showPairPreview(`/api/maps/${m.id}/asset/${m.metadata.satellite}`);}
 function showPairPreview(src){const doc=state.sourceSvg||new DOMParser().parseFromString(state.svgText,'image/svg+xml').documentElement;const vb=doc.getAttribute('viewBox')||'-2 17.68 964 924.64';const paths=[...doc.querySelectorAll('path,polygon,rect,circle')].filter(p=>!p.closest('defs,clipPath,mask,pattern,marker,symbol')).map(p=>{const c=p.cloneNode(true);c.setAttribute('fill','none');c.setAttribute('stroke','#f0a64c');c.setAttribute('stroke-width','1.5');c.setAttribute('vector-effect','non-scaling-stroke');return new XMLSerializer().serializeToString(c)}).join('');const [vx,vy,vw,vh]=vb.trim().split(/[ ,]+/).map(Number);$('pairPreview').innerHTML=`<svg id="pairSvg" viewBox="${vb}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><image id="pairImage" href="${src}" x="${vx}" y="${vy}" width="${vw}" height="${vh}" preserveAspectRatio="none" opacity="${state.alignment.opacity/100}"/><g id="pairImageTransform">${paths}</g></svg>`;syncAlign();}
-$('satelliteFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;if(isVercelPreview&&f.size>VERCEL_UPLOAD_SAFE_BYTES){toast('Vercel preview uploads must be under 4 MB. Larger files need direct object-storage uploads.');e.target.value='';return;}const fd=new FormData();fd.append('satellite',f);try{const r=await api(`/api/maps/${state.mapId}/satellite`,{method:'POST',body:fd});state.metadata=r.metadata;await refreshMaps();showPairPreview(URL.createObjectURL(f));$('pairStatus').textContent='unverified';toast('Satellite image uploaded. Alignment is unverified.')}catch(err){toast(err.message)}});
+$('satelliteFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const r=isGithubLfsStorage?await uploadSatelliteToGithub(state.mapId,f):await api(`/api/maps/${state.mapId}/satellite`,{method:'POST',body:(()=>{const fd=new FormData();fd.append('satellite',f);return fd})()});state.metadata=r.metadata;await refreshMaps();showPairPreview(URL.createObjectURL(f));$('pairStatus').textContent='unverified';toast(isGithubLfsStorage?'Satellite image saved to GitHub LFS. Alignment is unverified.':'Satellite image uploaded. Alignment is unverified.')}catch(err){toast(err.message)}finally{e.target.value=''}});
 function syncAlign(){state.alignment={opacity:+$('imageOpacity').value,scale:+$('imageScale').value,x:+$('imageX').value,y:+$('imageY').value};$('opacityValue').textContent=state.alignment.opacity+'%';$('scaleValue').textContent=state.alignment.scale+'%';$('xValue').textContent=state.alignment.x;$('yValue').textContent=state.alignment.y;const img=$('pairPreview').querySelector('#pairImage');if(img){img.setAttribute('opacity',state.alignment.opacity/100);const vb=($('pairSvg')?.getAttribute('viewBox')||'0 0 1000 600').trim().split(/[ ,]+/).map(Number);const cx=vb[0]+vb[2]/2,cy=vb[1]+vb[3]/2;img.setAttribute('transform',`translate(${state.alignment.x} ${state.alignment.y}) translate(${cx} ${cy}) scale(${state.alignment.scale/100}) translate(${-cx} ${-cy})`);}}
-['imageOpacity','imageScale','imageX','imageY'].forEach(id=>$(id).addEventListener('input',syncAlign));$('resetAlignment').onclick=()=>{[['imageOpacity',55],['imageScale',100],['imageX',0],['imageY',0]].forEach(([id,v])=>$(id).value=v);syncAlign()};$('verifyPair').onclick=async()=>{try{const fd=new FormData();fd.append('verified','true');fd.append('notes',$('alignmentNotes').value);fd.append('scale',String(state.alignment.scale));fd.append('x',String(state.alignment.x));fd.append('y',String(state.alignment.y));fd.append('opacity',String(state.alignment.opacity));const r=await api(`/api/maps/${state.mapId}/verify-pair`,{method:'POST',body:fd});state.metadata=r.metadata;await refreshMaps();$('pairStatus').textContent='verified';toast('Pair marked verified. Keep your alignment notes with the asset.')}catch(e){toast(e.message)}};
+['imageOpacity','imageScale','imageX','imageY'].forEach(id=>$(id).addEventListener('input',syncAlign));$('resetAlignment').onclick=()=>{[['imageOpacity',55],['imageScale',100],['imageX',0],['imageY',0]].forEach(([id,v])=>$(id).value=v);syncAlign()};$('verifyPair').onclick=async()=>{try{const fd=new FormData();fd.append('verified','true');fd.append('notes',$('alignmentNotes').value);fd.append('scale',String(state.alignment.scale));fd.append('x',String(state.alignment.x));fd.append('y',String(state.alignment.y));fd.append('opacity',String(state.alignment.opacity));const headers=isGithubLfsStorage?{'X-Map-Upload-Key':requireMapUploadKey()}:{};const r=await api(`/api/maps/${state.mapId}/verify-pair`,{method:'POST',body:fd,headers});state.metadata=r.metadata;await refreshMaps();$('pairStatus').textContent='verified';toast('Pair metadata committed to GitHub. Alignment is marked verified.')}catch(e){toast(e.message)}};
 $('changePairMap').onclick=()=>page('library');
 const dialog=$('uploadDialog');$('openUpload').onclick=()=>dialog.showModal();$('closeUpload').onclick=$('cancelUpload').onclick=()=>dialog.close();
-$('uploadForm').addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(e.target);if(isVercelPreview){const files=['svg','satellite'].map(key=>fd.get(key)).filter(file=>file instanceof File&&file.size>0);const totalBytes=files.reduce((sum,file)=>sum+file.size,0);if(totalBytes>VERCEL_UPLOAD_SAFE_BYTES){toast('Vercel preview allows about 4 MB total per upload request. Upload a smaller SVG/image or use direct object storage.');return;}}try{const r=await api('/api/maps',{method:'POST',body:fd});dialog.close();e.target.reset();state.mapId=r.map.id;await refreshMaps();toast('Map uploaded to website library.');page('editor')}catch(err){toast(err.message)}});
+$('uploadForm').addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(e.target);try{if(isVercelPreview&&!isGithubLfsStorage)throw new Error('Map upload is disabled because GitHub Git LFS is not configured for this deployment.');const r=isGithubLfsStorage?await uploadNewMapToGithub(fd):await api('/api/maps',{method:'POST',body:fd});dialog.close();e.target.reset();state.mapId=r.map.id;await refreshMaps();toast(isGithubLfsStorage?'Map committed to GitHub Git LFS.':'Map uploaded to local library.');page('editor')}catch(err){toast(err.message)}});
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 $('startWorkflow').onclick=()=>page('library');$('newProject').onclick=$('newProject2').onclick=()=>{state.projectId=null;state.projectName=null;state.mapId=preferredMapId();page('library')};$('openUpload').addEventListener('click',()=>{});$('exportNav')?.addEventListener('click',()=>page('editor'));$('studioNav')?.addEventListener('click',()=>page('dashboard'));
 init();

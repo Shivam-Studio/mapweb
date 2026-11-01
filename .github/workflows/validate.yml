@@ -21,9 +21,12 @@ jobs:
         run: node --check frontend/app.js
       - name: Compile Python backend and smoke test
         run: |
-          python -m py_compile app.py backend/app.py
-          python -m py_compile qa_vercel_smoke.py
+          python -m py_compile app.py backend/app.py backend/github_storage.py
+          python -m py_compile qa_vercel_smoke.py qa_github_lfs.py
           python qa_vercel_smoke.py
+          python qa_github_lfs.py
+      - name: Test Git LFS hashing and browser wiring
+        run: node QA_GITHUB_LFS_TEST.js
       - name: Test camera frame math
         run: node QA_CAMERA_TEST.js
       - name: Test selection colour and export behaviour

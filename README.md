@@ -1,8 +1,8 @@
-# MapMotion Studio 0.8.3 — Vercel deployment-ready source
+# MapMotion Studio 0.8.4 — Git LFS-backed map storage
 
 MapMotion Studio is a browser-based SVG map editor for map-animation creators. It provides country/region selection, world and continent camera framing, map styling, optional physical-terrain SVG layers when supplied by a map, manual raster pairing, saved projects, and three animator-focused export actions.
 
-This release adds nine bundled starter maps, a Vercel FastAPI entrypoint, and a temporary-storage compatibility mode. **It is not yet a durable multi-user cloud workspace** because persistent database and object-storage services have not been connected.
+This release adds durable GitHub Git LFS storage for user-uploaded map assets. The browser transfers large SVG/raster bytes directly to GitHub LFS; Vercel receives only small upload-authorization and Git metadata requests. Saved project records still use SQLite and remain temporary on Vercel.
 
 ## Quick start — Windows local app
 
@@ -29,7 +29,7 @@ Export the camera map and positioned country from the same source map and unchan
 3. Double-click `PUSH_TO_GITHUB.bat`.
 4. Enter your Git commit email if asked and complete Git Credential Manager sign-in.
 
-The BAT targets <https://github.com/Shivam-Studio/mapweb>. It sets the expected `origin`, creates a local recovery branch before remote synchronization, fetches/merges the existing `main` branch and never force-pushes. Curated starter maps are explicitly allowed by `.gitignore`; private uploads, databases and local projects remain excluded. See [`PUSH_TO_GITHUB.md`](PUSH_TO_GITHUB.md).
+The BAT targets <https://github.com/Shivam-Studio/mapweb>. It sets the expected `origin`, creates a local recovery branch before remote synchronization, fetches/merges the existing `main` branch and never force-pushes. Uploaded map binaries are stored by GitHub Git LFS; the Git repository contains small pointer files, the catalog and metadata. See [`PUSH_TO_GITHUB.md`](PUSH_TO_GITHUB.md).
 
 ## Deploy to Vercel
 
@@ -46,17 +46,41 @@ The root `requirements.txt` lists the runtime dependencies. `.python-version` se
 
 **Current Vercel project:** `mapweb-p412` is the FastAPI deployment imported from `Shivam-Studio/mapweb`. Keep Root Directory at `./` and verify the source commit after each push.
 
-## Vercel storage limitation — preview mode only
+## Durable map uploads with GitHub Git LFS
 
-Vercel's deployment bundle is read-only. In Vercel mode, this app routes SQLite and upload writes into `/tmp/MapMotionStudio` to avoid write failures. Vercel's `/tmp` is temporary; uploaded maps, satellite images and saved projects are **not guaranteed to survive restarts or be visible to other function instances**.
+Vercel Functions reject request bodies larger than 4.5 MB. MapMotion Studio avoids that limit: the browser hashes the selected files, asks the FastAPI endpoint for a Git LFS upload action, and then transfers the file bytes directly to GitHub's LFS upload URL. Vercel does not receive the large file body. After upload, the API commits only LFS pointer files, `metadata.json`, and `storage/maps/user-uploads/catalog.json` to the configured Git branch.
 
-Before production use, integrate a persistent PostgreSQL database and object storage, configure their credentials as Vercel Environment Variables, and migrate the current SQLite schema and map asset workflow. Also enable Vercel Deployment Protection for previews; the MVP does not yet include user authentication or per-user data isolation. This ZIP does not create external accounts or pretend temporary storage is persistent. The app displays a temporary-storage warning when it detects Vercel mode.
+### Required environment variables
+
+Add these to **Vercel → Project → Settings → Environment Variables** for Production (and Preview if you use it), then redeploy:
+
+| Variable | Value |
+|---|---|
+| `MAPMOTION_GITHUB_OWNER` | `Shivam-Studio` (repository owner / organization) |
+| `MAPMOTION_GITHUB_USERNAME` | Your personal GitHub username used for Git LFS Basic authentication |
+| `MAPMOTION_GITHUB_REPO` | `mapweb` |
+| `MAPMOTION_GITHUB_BRANCH` | `main` |
+| `MAPMOTION_GITHUB_TOKEN` | Fine-grained GitHub token with **Contents: Read and write** for this repository |
+| `MAPMOTION_UPLOAD_KEY` | A long random secret used when the administrator uploads or updates map assets |
+| `MAPMOTION_MAX_LFS_FILE_MB` | Optional. Default `2000` MB (conservative below Free/Pro max); use `4000` for Team or `5000` for Enterprise Cloud |
+
+Keep the GitHub token and upload key server-side in Vercel Environment Variables. Never put either secret in `frontend/app.js`, HTML, or a committed `.env` file. The administrator enters the upload key in the browser when starting an upload; it remains in page memory only.
+
+The repository must contain `.gitattributes` with the rule for `storage/maps/user-uploads/**`. This ZIP includes that file. Push this release to `Shivam-Studio/mapweb` before enabling the Vercel variables.
+
+### GitHub LFS limits — not unlimited storage
+
+Git LFS bypasses Git's normal large-file blob limit, but it is not unlimited. GitHub's current per-file LFS maximum is 2 GB on Free/Pro, 4 GB on Team, and 5 GB on Enterprise Cloud. Default app configuration is 2 GB per file. Free and Pro accounts include 10 GiB storage and 10 GiB monthly download bandwidth; Team and Enterprise Cloud include 250 GiB of each. Additional usage may be billed, or LFS can be blocked after the quota is exhausted if overages are disabled. Check the GitHub plan and LFS budget before uploading very large map libraries.
+
+Large downloads from the map library use Git LFS bandwidth. Projects are **not** stored in Git in this release: saved project data still lives in Vercel's temporary SQLite directory and can disappear on restarts or across function instances.
+
+See [`VERCEL_DEPLOYMENT.md`](VERCEL_DEPLOYMENT.md) for setup and validation details.
 
 ## Map assets and licences
 
 This release includes nine starter maps: a World Map — India View, a dedicated World Physical Map — India View, and Asia, Europe, Africa, North America, South America, Oceania, and India & Neighbours regional maps. Country boundary geometry is based on the user-supplied amCharts world SVG and includes the visible credit plus CC BY 4.0 attribution. See [`storage/maps/ATTRIBUTION.md`](storage/maps/ATTRIBUTION.md). The physical relief layer is illustrative project-generated terrain, not a measured elevation dataset. No third-party satellite imagery is bundled. A visual contact sheet is included as [`STARTER_MAPS_PREVIEW.jpg`](STARTER_MAPS_PREVIEW.jpg).
 
-On Vercel preview mode, uploaded assets use temporary storage. Do not treat those uploads as backups. Vercel Functions also enforce a 4.5 MB request/response body limit; this package conservatively limits hosted-preview uploads to 4 MB total per request. Larger SVG and raster files must go directly to object storage. See [`VERCEL_DEPLOYMENT.md`](VERCEL_DEPLOYMENT.md).
+Uploaded map assets on Vercel use GitHub Git LFS when the required server-side environment variables are configured. They are not written into the Vercel filesystem. Git LFS per-file limits and account quotas apply. Saved projects are still temporary on Vercel; see [`VERCEL_DEPLOYMENT.md`](VERCEL_DEPLOYMENT.md).
 
 ## Validation commands
 
@@ -65,12 +89,14 @@ Install QA dependencies, then run:
 ```bash
 python -m pip install -r requirements-dev.txt
 node --check frontend/app.js
-python -m py_compile app.py backend/app.py
+python -m py_compile app.py backend/app.py backend/github_storage.py
+node QA_GITHUB_LFS_TEST.js
 node QA_CAMERA_TEST.js
 python qa_vercel_smoke.py
+python qa_github_lfs.py
 ```
 
-The QA smoke test runs the FastAPI app with `VERCEL=1` and checks all nine bundled map registrations and their SVG, physical, texture, and thumbnail routes; it also checks home/static assets, health, SVG upload, satellite upload, pair verification, project create/list/delete, unsafe SVG rejection, and that writable data goes to the configured temporary directory. It does not prove durable cloud persistence or a successful remote Vercel deployment.
+The QA smoke tests check the nine bundled maps, frontend assets, local camera/export behaviour, Vercel upload blocking when Git LFS is not configured, and mocked Git LFS upload/catalog flows. They do not prove that the connected GitHub token, repository permissions, real LFS upload URLs, or production Vercel deployment are configured correctly.
 
 ## Licence
 

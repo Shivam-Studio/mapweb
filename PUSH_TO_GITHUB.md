@@ -1,4 +1,4 @@
-# Push MapMotion Studio 0.8.3 to GitHub
+# Push MapMotion Studio 0.8.4 to GitHub
 
 ## Existing Windows clone (recommended)
 
@@ -10,7 +10,9 @@
 
 The script targets `https://github.com/Shivam-Studio/mapweb.git`. It creates a recovery branch, repairs the known interrupted-merge marker if present, fetches `origin/main`, merges without force-pushing, and stops safely on other conflicts.
 
-The `.gitignore` file intentionally tracks only the nine curated starter-map folders. It continues to ignore user-upload folders, private map data, databases, secrets, `.venv`, and local project data. The included `vercel.json` explicitly includes `storage/maps/**` in the root FastAPI function bundle.
+The nine curated starter maps remain committed normally. New user-uploaded maps are written by the deployed app as Git LFS objects under `storage/maps/user-uploads/`; their tiny pointer files, metadata and catalog are committed to `main`. `.gitattributes` tracks uploaded SVG, PNG, JPG and WebP binaries with Git LFS while keeping JSON metadata and the catalog in ordinary Git. Databases, secrets, `.venv`, and local project data remain excluded.
+
+Before deploying, confirm that `.gitattributes` is committed and Git LFS is enabled for the GitHub repository. Configure the server-side Vercel variables listed in `VERCEL_DEPLOYMENT.md`.
 
 ## After push
 

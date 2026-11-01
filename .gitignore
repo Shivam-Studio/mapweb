@@ -36,4 +36,7 @@ storage/maps/*
 !storage/maps/oceania/**
 !storage/maps/india-neighbours/
 !storage/maps/india-neighbours/**
+# User uploads are committed as tiny Git LFS pointer files; large bytes live in LFS.
+!storage/maps/user-uploads/
+!storage/maps/user-uploads/**
 storage/projects/

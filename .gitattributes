@@ -1,0 +1,5 @@
+# Keep only large map binaries in Git LFS; JSON catalogs and metadata stay normal Git files.
+storage/maps/user-uploads/**/*.svg filter=lfs diff=lfs merge=lfs -text
+storage/maps/user-uploads/**/*.png filter=lfs diff=lfs merge=lfs -text
+storage/maps/user-uploads/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+storage/maps/user-uploads/**/*.webp filter=lfs diff=lfs merge=lfs -text
