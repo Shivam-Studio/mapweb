@@ -91,7 +91,7 @@ DB = resolve_database_path()
 for directory in (MAPS, PROJECTS):
     directory.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="MapMotion Studio API", version="0.8.2")
+app = FastAPI(title="MapMotion Studio API", version="0.8.3")
 
 
 @contextmanager
@@ -218,7 +218,7 @@ def health() -> dict:
     return {
         "ok": True,
         "product": "MapMotion Studio",
-        "version": "0.8.2",
+        "version": "0.8.3",
         "runtime": "vercel" if IS_VERCEL else "local",
         "storage_mode": "ephemeral" if IS_VERCEL else "local-persistent",
         "persistent_storage_configured": not IS_VERCEL,

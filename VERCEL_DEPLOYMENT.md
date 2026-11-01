@@ -1,4 +1,4 @@
-# Vercel deployment — MapMotion Studio 0.8.2
+# Vercel deployment — MapMotion Studio 0.8.3
 
 ## Deploy the complete application
 
@@ -37,8 +37,8 @@ The application includes nine starter maps: World Map — India View, World Phys
 
 ## Verify after deployment
 
-1. `/` renders MapMotion Studio 0.8.2.
-2. `/api/health` returns `ok: true`, version `0.8.2`, runtime `vercel`, and storage mode `ephemeral`.
+1. `/` renders MapMotion Studio 0.8.3.
+2. `/api/health` returns `ok: true`, version `0.8.3`, runtime `vercel`, and storage mode `ephemeral`.
 3. `/api/maps` returns the nine bundled maps.
 4. `/api/maps/world-india/asset/world-india.svg` returns the world SVG.
 5. `/api/maps/world-india/asset/physical.svg` returns the physical layer.
@@ -49,3 +49,8 @@ The application includes nine starter maps: World Map — India View, World Phys
 Vercel's writable `/tmp` directory is temporary and is not shared durable storage. User-uploaded maps and SQLite projects may disappear across function restarts or be unavailable on another function instance. Production use requires persistent PostgreSQL and object storage, plus authentication/authorization and upload controls. No external credentials are bundled.
 
 The hosted UI conservatively blocks upload requests above 4 MB; Vercel Functions have a 4.5 MB request/response payload limit. Larger assets should use direct-to-object-storage uploads.
+
+
+## 0.8.3 export verification
+
+After deploying, apply a bright colour to a selected country and confirm it remains visible while selected. Camera Map SVG should contain no geometry outline strokes while retaining applied country fills. Country PNG should use the applied fill even in Physical mode. The positioned-country ZIP should include `camera-map-with-country-highlight.jpg`, `country-at-camera-position.png`, `placement.json`, and `IMPORT-INSTRUCTIONS.txt`. The JPEG is a flattened full-camera image; the PNG is the transparent overlay.

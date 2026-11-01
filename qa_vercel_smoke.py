@@ -60,7 +60,7 @@ def main() -> None:
         check(health.status_code == 200, "Health endpoint must return 200")
         health_data = health.json()
         check(health_data.get("ok") is True, "Health endpoint must report ok")
-        check(health_data.get("version") == "0.8.2", "Health endpoint must report 0.8.2")
+        check(health_data.get("version") == "0.8.3", "Health endpoint must report 0.8.3")
         check(health_data.get("storage_mode") == "ephemeral", "Vercel mode must clearly report ephemeral storage")
         check(health_data.get("persistent_storage_configured") is False, "Vercel preview must not claim persistence")
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.3 — Selection colour and animator export corrections
+
+- Applied country fill colours remain visible while a country is selected; selection styling no longer replaces the user fill with hard-coded orange.
+- Applying colour refreshes the live map, camera preview, country preview and positioned-country preview.
+- Applied fill colour takes priority over physical relief texture in Country PNG and positioned-country exports.
+- Camera Map SVG preserves the active camera and applied fills while removing all geometry outline strokes and editor-only selection styling.
+- Positioned Country ZIP now includes a transparent full-camera country PNG, a flattened full-camera JPEG showing the applied country colour, placement.json and updated instructions.
+- The JPEG is explicitly flattened (not transparent); use the PNG as the independent compositor overlay.
+
 ## 0.8.2 — Bundled starter map library
 
 - Added nine ready-to-use bundled starter maps: World Map — India View, World Physical Map — India View, Asia, Europe, Africa, North America, South America, Oceania, and India & Neighbours.

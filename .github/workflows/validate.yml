@@ -26,3 +26,5 @@ jobs:
           python qa_vercel_smoke.py
       - name: Test camera frame math
         run: node QA_CAMERA_TEST.js
+      - name: Test selection colour and export behaviour
+        run: node QA_EXPORT_COLOUR_TEST.js

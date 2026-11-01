@@ -1,4 +1,4 @@
-# Public release checklist — MapMotion Studio 0.8.2
+# Public release checklist — MapMotion Studio 0.8.3
 
 - [x] Repository target documented as `Shivam-Studio/mapweb`.
 - [x] Nine starter maps included: world (India view), world physical (India view), Asia, Europe, Africa, North America, South America, Oceania, India & Neighbours.

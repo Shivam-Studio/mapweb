@@ -188,7 +188,15 @@ function findCountry(){
   const p=matches[0];if(state.selectionMode==='single')state.selected.clear();state.selected.add(+p.dataset.index);
   state.isolated=false;state.paths.forEach(x=>x.style.opacity='1');updateSelection();if(shouldAutoFitAfterSelect())zoomToSelection('auto-fit');else applyView();p.focus();
 } $('findCountry').onclick=findCountry;$('countrySearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();findCountry()}});$('countrySearch').addEventListener('input',()=>{const q=$('countrySearch').value.trim().toLowerCase();const matches=state.paths.filter(p=>!q||p.dataset.name.toLowerCase().includes(q)||p.dataset.code.toLowerCase().includes(q)).slice(0,100);$('countryOptions').innerHTML=matches.map(p=>`<option value="${esc(p.dataset.name)}"></option>`).join('')});
-$('applyStyle').onclick=()=>{if(!state.selected.size)return toast('Select one or more regions first.');for(const i of state.selected){const p=state.paths[i];p.dataset.customfill=$('fillColor').value;p.dataset.customstroke=$('strokeColor').value;p.setAttribute('fill',$('fillColor').value);p.setAttribute('stroke',$('strokeColor').value);p.setAttribute('stroke-width',$('strokeWidth').value)}toast('Style applied to selected regions.')};
+$('applyStyle').onclick=()=>{if(!state.selected.size)return toast('Select one or more regions first.');for(const i of state.selected){const feature=state.paths[i];feature.dataset.customfill=$('fillColor').value;feature.dataset.customstroke=$('strokeColor').value;feature.setAttribute('fill',$('fillColor').value);feature.setAttribute('stroke',$('strokeColor').value);feature.setAttribute('stroke-width',$('strokeWidth').value);feature.setAttribute('fill-opacity','1');feature.setAttribute('stroke-opacity',state.showCountryLayer?'1':'0')}updateSelection();applyView();toast(`Applied ${$('fillColor').value.toUpperCase()} to ${state.selected.size} selected region${state.selected.size===1?'':'s'}.`) };
+function resolveCountryAppearance(feature){
+  const customFill=String(feature?.dataset?.customfill||'').trim();
+  const customStroke=String(feature?.dataset?.customstroke||'').trim();
+  const physical=!customFill&&state.style==='physical'&&state.showPhysicalLayer&&!!state.physicalTextureData;
+  const baseFill=state.style==='blank'?'#f0f3f5':(feature?.dataset?.basefill&&feature.dataset.basefill!=='none'&&feature.dataset.basefill!=='transparent'?feature.dataset.basefill:'#9aaab7');
+  const baseStroke=state.style==='blank'?'#778493':state.style==='physical'?'#465c4b':state.style==='satellite'?'#c9b997':'#dce4ec';
+  return {customFill,customStroke,physical,fill:customFill||(physical?'none':baseFill),stroke:customStroke||baseStroke};
+}
 function countryExportDimensions(){return {w:Math.round(+$('countryExportWidth').value),h:Math.round(+$('countryExportHeight').value)}}
 function buildCountryExportSvg({quiet=false}={}){
   const selectedIndices=[...state.selected].filter(i=>Number.isInteger(i)&&state.paths[i]);
@@ -220,7 +228,8 @@ function buildCountryExportSvg({quiet=false}={}){
   const scale=Math.min(w/crop.width,h/crop.height);
   const tx=(w-crop.width*scale)/2-crop.x*scale,ty=(h-crop.height*scale)/2-crop.y*scale;
   const group=document.createElementNS(NS,'g');group.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`);
-  const physicalMode=state.style==='physical'&&state.showPhysicalLayer&&!!state.physicalTextureData;
+  const appearance=resolveCountryAppearance(feature);
+  const physicalMode=appearance.physical;
   if(physicalMode){
     const vb=(state.baseViewBox||live.getAttribute('viewBox')||'0 0 1000 600').trim().split(/[ ,]+/).map(Number),[x,y,vw,vh]=vb;
     const image=document.createElementNS(NS,'image');image.setAttribute('href',state.physicalTextureData);image.setAttribute('x',x);image.setAttribute('y',y);image.setAttribute('width',vw);image.setAttribute('height',vh);image.setAttribute('preserveAspectRatio','none');
@@ -228,12 +237,12 @@ function buildCountryExportSvg({quiet=false}={}){
   }
   const country=cloneFeatureWithAncestors(feature,live);country.removeAttribute('class');country.removeAttribute('style');
   const leaf=country.matches?.('[data-index]')?country:country.querySelector?.('[data-index]')||country;leaf.removeAttribute('class');leaf.removeAttribute('style');
-  if(physicalMode){leaf.setAttribute('fill','none');leaf.setAttribute('stroke',state.showCountryLayer?(feature.dataset.customstroke||'#f4f6f8'):'none')}
-  else{leaf.setAttribute('fill',feature.dataset.customfill||(state.style==='blank'?'#f0f3f5':(feature.dataset.basefill&&feature.dataset.basefill!=='none'?feature.dataset.basefill:'#e8a34a')));leaf.setAttribute('stroke',state.showCountryLayer?(feature.dataset.customstroke||'#f4f6f8'):'none')}
+  if(physicalMode){leaf.setAttribute('fill','none');leaf.setAttribute('stroke',state.showCountryLayer?(appearance.customStroke||appearance.stroke):'none')}
+  else{leaf.setAttribute('fill',appearance.fill);leaf.setAttribute('stroke',state.showCountryLayer?(appearance.customStroke||appearance.stroke):'none')}
   leaf.setAttribute('stroke-width',$('strokeWidth').value||'1.2');leaf.setAttribute('vector-effect','non-scaling-stroke');leaf.setAttribute('stroke-opacity',state.showCountryLayer?'1':'0');group.appendChild(country);out.appendChild(group);
   if(!$('countryExportTransparent').checked){const bg=document.createElementNS(NS,'rect');bg.setAttribute('width',w);bg.setAttribute('height',h);bg.setAttribute('fill','#101720');out.insertBefore(bg,defs)}
   $('countryExportTarget').textContent=`${name} · ${w} × ${h}${physicalMode?' · Physical texture':''}`;
-  $('countryExportHint').textContent=physicalMode?'Only the selected country is included, filled with the physical relief texture. Everything outside its boundary is transparent.':'Only the selected country is included. Its surroundings are transparent; the map camera and other countries are not exported.';
+  $('countryExportHint').textContent=appearance.customFill?`Only ${name} is included, filled with your applied colour ${appearance.customFill}. Everything outside its boundary is transparent.`:physicalMode?'Only the selected country is included, filled with the physical relief texture. Everything outside its boundary is transparent.':'Only the selected country is included. Its surroundings are transparent; the map camera and other countries are not exported.';
   return {svg:out,name,w,h,physical:physicalMode,transparent:$('countryExportTransparent').checked};
 }
 function cameraFrameSpec(preview=false){
@@ -262,16 +271,19 @@ function buildCameraViewSvg({preview=false}={}){
     if(terrain){terrain.removeAttribute('id');terrain.removeAttribute('style');terrain.setAttribute('href',state.physicalTextureData);terrain.setAttribute('display','inline')}
     else{const base=(state.baseViewBox||'0 0 1000 600').trim().split(/[ ,]+/).map(Number),[x,y,vw,vh]=base;const image=document.createElementNS(NS,'image');image.setAttribute('href',state.physicalTextureData);image.setAttribute('x',x);image.setAttribute('y',y);image.setAttribute('width',vw);image.setAttribute('height',vh);image.setAttribute('preserveAspectRatio','none');svg.insertBefore(image,svg.firstChild)}
   }else terrain?.remove();
+  // Keep the current map and applied fill colours, but remove every geometry outline.
+  svg.querySelectorAll('path,polygon,polyline,line,rect,circle,ellipse').forEach(shape=>{
+    if(shape.closest('defs,clipPath,mask,pattern,marker,symbol'))return;
+    shape.setAttribute('stroke','none');shape.setAttribute('stroke-opacity','0');
+  });
   svg.querySelectorAll('[data-index]').forEach(path=>{
     const index=Number(path.getAttribute('data-index')),source=state.paths[index];if(!source)return;
     path.classList.remove('country','selected');path.removeAttribute('tabindex');path.removeAttribute('role');path.removeAttribute('aria-label');path.removeAttribute('data-index');path.removeAttribute('data-code');path.removeAttribute('data-name');path.removeAttribute('data-basefill');path.removeAttribute('style');path.setAttribute('pointer-events','none');
-    const physical=state.style==='physical';
-    const fill=physical?'none':state.style==='blank'?(source.dataset.customfill||'#f0f3f5'):(source.dataset.customfill||(source.dataset.basefill&&source.dataset.basefill!=='none'&&source.dataset.basefill!=='transparent'?source.dataset.basefill:'#9aaab7'));
-    const stroke=state.showCountryLayer?(source.dataset.customstroke||(physical?'#465c4b':state.style==='blank'?'#778493':'#dce4ec')):'none';
-    path.setAttribute('fill',fill);path.setAttribute('stroke',stroke);path.setAttribute('stroke-width',$('strokeWidth')?.value||'0.8');
-    path.setAttribute('fill-opacity',state.showCountryLayer&&!physical?'1':'0');path.setAttribute('stroke-opacity',state.showCountryLayer?'1':'0');path.setAttribute('opacity','1');path.removeAttribute('filter');
+    const appearance=resolveCountryAppearance(source);
+    path.setAttribute('fill',appearance.fill);path.setAttribute('stroke','none');path.setAttribute('stroke-width','0');
+    path.setAttribute('fill-opacity',appearance.physical?'0':'1');path.setAttribute('stroke-opacity','0');path.setAttribute('opacity','1');path.removeAttribute('filter');
   });
-  const title=document.createElementNS(NS,'title');title.textContent=`${state.metadata?.name||'Map'} — ${$('viewSelect')?.selectedOptions?.[0]?.textContent||'Current camera'} — map only`;svg.insertBefore(title,svg.firstChild);
+  const title=document.createElementNS(NS,'title');title.textContent=`${state.metadata?.name||'Map'} — ${$('viewSelect')?.selectedOptions?.[0]?.textContent||'Current camera'} — outline-free camera map`;svg.insertBefore(title,svg.firstChild);
   const xml=new XMLSerializer().serializeToString(svg);return {svg,xml,w,h,viewBox,aspect};
 }
 function cleanFeatureClone(feature,live){
@@ -293,15 +305,16 @@ function buildPositionedCountrySvg({preview=false}={}){
   live.querySelectorAll('defs').forEach(source=>[...source.children].forEach(node=>defs.appendChild(node.cloneNode(true))));
   const clip=document.createElementNS(NS,'clipPath');clip.setAttribute('id','mmPositionedCountryClip');clip.setAttribute('clipPathUnits','userSpaceOnUse');
   const {clone:clipGeometry,leaf:clipLeaf}=cleanFeatureClone(feature,live);clipLeaf.setAttribute('fill','#fff');clipLeaf.setAttribute('fill-opacity','1');clipLeaf.setAttribute('stroke','none');clipLeaf.setAttribute('stroke-opacity','0');clip.appendChild(clipGeometry);defs.appendChild(clip);svg.appendChild(defs);
-  const physical=state.style==='physical'&&state.showPhysicalLayer&&!!state.physicalTextureData;
+  const appearance=resolveCountryAppearance(feature);
+  const physical=appearance.physical;
   if(physical){
     const base=(state.baseViewBox||live.getAttribute('viewBox')||'0 0 1000 600').trim().split(/[ ,]+/).map(Number),[x,y,w,h]=base;
     const texture=document.createElementNS(NS,'image');texture.setAttribute('href',state.physicalTextureData);texture.setAttribute('x',x);texture.setAttribute('y',y);texture.setAttribute('width',w);texture.setAttribute('height',h);texture.setAttribute('preserveAspectRatio','none');texture.setAttribute('clip-path','url(#mmPositionedCountryClip)');svg.appendChild(texture);
   }
   const {clone:country,leaf}=cleanFeatureClone(feature,live);
   if(physical){leaf.setAttribute('fill','none');leaf.setAttribute('fill-opacity','0')}
-  else{const fill=feature.dataset.customfill||(state.style==='blank'?'#f0f3f5':(feature.dataset.basefill&&feature.dataset.basefill!=='none'&&feature.dataset.basefill!=='transparent'?feature.dataset.basefill:'#e8a34a'));leaf.setAttribute('fill',fill);leaf.setAttribute('fill-opacity','1')}
-  leaf.setAttribute('stroke',feature.dataset.customstroke||(physical?'#465c4b':state.style==='blank'?'#778493':'#dce4ec'));leaf.setAttribute('stroke-width',$('strokeWidth')?.value||'0.8');leaf.setAttribute('stroke-opacity','1');leaf.setAttribute('vector-effect','non-scaling-stroke');svg.appendChild(country);
+  else{leaf.setAttribute('fill',appearance.fill);leaf.setAttribute('fill-opacity','1')}
+  leaf.setAttribute('stroke',state.showCountryLayer?appearance.stroke:'none');leaf.setAttribute('stroke-width',$('strokeWidth')?.value||'0.8');leaf.setAttribute('stroke-opacity',state.showCountryLayer?'1':'0');leaf.setAttribute('vector-effect','non-scaling-stroke');svg.appendChild(country);
   const [cx,cy,cw,ch]=frame.nums;
   const ix=Math.max(bounds.x,cx),iy=Math.max(bounds.y,cy),ir=Math.min(bounds.x+bounds.width,cx+cw),ib=Math.min(bounds.y+bounds.height,cy+ch);
   const visible=ir>ix&&ib>iy?{x:ix,y:iy,width:ir-ix,height:ib-iy}:null;
@@ -347,13 +360,20 @@ function updateCameraViewPreview(){
   if(cameraViewPreviewUrl)URL.revokeObjectURL(cameraViewPreviewUrl);
   cameraViewPreviewUrl=URL.createObjectURL(new Blob([result.xml],{type:'image/svg+xml;charset=utf-8'}));img.src=cameraViewPreviewUrl;img.style.display='block';empty.style.display='none';
   const context=$('positionedCountryContext');if(context){context.src=cameraViewPreviewUrl;context.style.display='block'}
-  $('cameraViewInfo').textContent=`${$('viewSelect')?.selectedOptions?.[0]?.textContent||'Current view'} · ${Math.round(state.zoom*100)}% zoom · pan ${Math.round(state.panX)}, ${Math.round(state.panY)} px · ${result.w} × ${result.h}${cameraFrameSpec(false)?.capped?' · auto-limited to 32 MP':''}. Map only; no country selection is included.`;
+  $('cameraViewInfo').textContent=`${$('viewSelect')?.selectedOptions?.[0]?.textContent||'Current view'} · ${Math.round(state.zoom*100)}% zoom · pan ${Math.round(state.panX)}, ${Math.round(state.panY)} px · ${result.w} × ${result.h}${cameraFrameSpec(false)?.capped?' · auto-limited to 32 MP':''}. No outlines; applied country fills retained.`;
 }
 async function renderSvgToPngBlob(svg,w,h){
   if(!Number.isInteger(w)||!Number.isInteger(h)||w<1||h<1||w*h>33554432)throw new Error('Output exceeds the safe 32-megapixel PNG limit. Choose 4K or lower.');
   const image=await renderSvgNodeToImage(svg),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
   const ctx=canvas.getContext('2d');if(!ctx)throw new Error('PNG canvas could not be allocated.');ctx.clearRect(0,0,w,h);ctx.drawImage(image,0,0,w,h);
   return await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('PNG encoding failed.')),'image/png'));
+}
+async function renderSvgToJpegBlob(svg,w,h,background='#101720',quality=.94){
+  if(!Number.isInteger(w)||!Number.isInteger(h)||w<1||h<1||w*h>33554432)throw new Error('JPEG output exceeds the safe 32-megapixel limit. Choose 4K or lower.');
+  const image=await renderSvgNodeToImage(svg),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+  const ctx=canvas.getContext('2d');if(!ctx)throw new Error('JPEG canvas could not be allocated.');
+  ctx.fillStyle=background;ctx.fillRect(0,0,w,h);ctx.drawImage(image,0,0,w,h);
+  return await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('JPEG encoding failed.')),'image/jpeg',quality));
 }
 async function updatePositionedCountryPreview(){
   const job=++positionedPreviewJob,img=$('positionedCountryPreview'),empty=$('positionedCountryPreviewEmpty'),info=$('positionedCountryInfo');if(!img||!empty||!$('liveMap'))return;
@@ -409,36 +429,42 @@ async function sourceMapFingerprint(text){
   return {algorithm:'FNV-1a 32-bit pair (non-cryptographic fallback)',value:`${(a>>>0).toString(16).padStart(8,'0')}${(b>>>0).toString(16).padStart(8,'0')}`};
 }
 async function downloadPositionedCountryPackage(){
-  const result=buildPositionedCountrySvg();if(!result)return;if(!result.visibleBounds){toast('The selected country is outside the current camera. Pan/zoom to include it before exporting its position.');return}
+  const result=buildPositionedCountrySvg();if(!result)return;if(!result.visibleBounds){toast('The selected country is outside the current camera. Pan or zoom to include it before exporting its position.');return}
   try{
-    const png=await renderSvgToPngBlob(result.svg,result.w,result.h),[cx,cy,cw,ch]=result.viewBox.trim().split(/[ ,]+/).map(Number),b=result.visiblePixelBounds,full=result.fullPixelBounds;
+    const png=await renderSvgToPngBlob(result.svg,result.w,result.h);
+    const cameraMap=buildCameraViewSvg();
+    if(!cameraMap||cameraMap.w!==result.w||cameraMap.h!==result.h)throw new Error('Camera and positioned-country output frames do not match.');
+    const jpeg=await renderSvgToJpegBlob(cameraMap.svg,cameraMap.w,cameraMap.h,'#101720',.95);
+    const b=result.visiblePixelBounds,full=result.fullPixelBounds;
+    const appliedFill=result.feature?.dataset?.customfill||null;
     const assetFingerprint=await sourceMapFingerprint(state.svgText);
     const round=o=>Object.fromEntries(Object.entries(o||{}).map(([k,v])=>[k,Number(v.toFixed(4))]));
     const manifest={
-      format:'MapMotion Studio Positioned Country Package',schemaVersion:1,createdAt:new Date().toISOString(),
-      files:{countryPng:'country-at-camera-position.png',cameraMapReference:'Download the matching camera-view SVG from the same editor session.',placement:'placement.json'},
+      format:'MapMotion Studio Positioned Country Package',schemaVersion:2,createdAt:new Date().toISOString(),
+      files:{countryPng:'country-at-camera-position.png',cameraJpeg:'camera-map-with-country-highlight.jpg',cameraMapReference:'Download the matching outline-free Camera Map SVG from the same editor session.',placement:'placement.json'},
       map:{id:state.mapId,name:state.metadata?.name||state.mapId,sourceSvg:'world-india.svg',sourceViewBox:state.baseViewBox||null,sourceFingerprint:assetFingerprint,projection:state.metadata?.projection||'unknown',coverage:state.metadata?.coverage||'unknown'},
-      camera:{view:state.view,viewLabel:$('viewSelect')?.selectedOptions?.[0]?.textContent||state.view,viewBox:result.viewBox,zoom:state.zoom,panPixels:{x:state.panX,y:state.panY},editorCanvasPixels:{width:$('mapCanvas').clientWidth,height:$('mapCanvas').clientHeight},style:state.style,physicalTextureIncluded:result.physical,output:{width:result.w,height:result.h,format:'PNG',background:'transparent'},preserveAspectRatio:'none'},
-      country:{name:result.name,code:result.code,featureIndex:result.featureIndex,sourceMapBounds:round(result.sourceBounds),cameraFrameBoundsPixels:round(full),visibleCameraFrameBoundsPixels:b?round(b):null,normalizedCameraFrameBounds:b?round({x:b.x/result.w,y:b.y/result.h,width:b.width/result.w,height:b.height/result.h}):null,insideCamera:!!b,fullyInsideCamera:result.fullyInsideCamera},
+      camera:{view:state.view,viewLabel:$('viewSelect')?.selectedOptions?.[0]?.textContent||state.view,viewBox:result.viewBox,zoom:state.zoom,panPixels:{x:state.panX,y:state.panY},editorCanvasPixels:{width:$('mapCanvas').clientWidth,height:$('mapCanvas').clientHeight},style:state.style,physicalTextureIncluded:result.physical,output:{width:result.w,height:result.h,transparentCountryOverlay:'PNG',fullCameraComposition:'JPEG',jpegBackground:'#101720',jpegQuality:0.95},preserveAspectRatio:'none'},
+      country:{name:result.name,code:result.code,featureIndex:result.featureIndex,appliedFill:appliedFill,appliedStroke:result.feature?.dataset?.customstroke||null,sourceMapBounds:round(result.sourceBounds),cameraFrameBoundsPixels:round(full),visibleCameraFrameBoundsPixels:b?round(b):null,normalizedCameraFrameBounds:b?round({x:b.x/result.w,y:b.y/result.h,width:b.width/result.w,height:b.height/result.h}):null,insideCamera:!!b,fullyInsideCamera:result.fullyInsideCamera},
       placement:{canvasWidth:result.w,canvasHeight:result.h,x:0,y:0,anchor:'center',position:{x:result.w/2,y:result.h/2},scalePercent:100,rotationDegrees:0,blendMode:'normal',alignment:'Import country-at-camera-position.png over the matching Camera Map export at the same canvas dimensions. Keep anchor centered, position at canvas center, scale 100%, rotation 0.'},
       coordinateNotes:{units:'Source SVG user units and output pixels',geographicCoordinates:'Not provided unless the source map is independently georeferenced.',alignmentGuarantee:'Pixel-exact relative placement only when the base camera map and this country package are exported from the same source map, same viewBox, same camera pan/zoom, same style framing, and the same camera output preset.'}
     };
     const safe=s=>String(s||'map').normalize('NFKD').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'map';
-    const instructions=`MAPMOTION STUDIO — POSITIONED COUNTRY\n\nThis package contains a transparent full-frame PNG and placement.json.\n\nIMPORT STEPS\n1. Export the Camera Map SVG from the same map and editor camera session.\n2. Convert that SVG to PNG if your editor needs a raster base map. Preserve the SVG output width and height.\n3. Create a composition/canvas of ${result.w} × ${result.h} pixels.\n4. Import the base camera map and country-at-camera-position.png.\n5. Keep both layers centered at X=${result.w/2}, Y=${result.h/2}, scale 100%, rotation 0°.\n6. Do not crop, fit-to-screen, or independently resize only one layer.\n\nThe country PNG is already placed in the same camera frame; transparent pixels preserve its exact position. placement.json records the source map, camera viewBox, country bounds and pixel coordinates.\n\nAlignment only applies to the matching source map and camera settings. The source map does not necessarily provide geographic latitude/longitude.\n`;
+    const instructions=`MAPMOTION STUDIO — POSITIONED COUNTRY PACKAGE\n\nFiles included:\n- camera-map-with-country-highlight.jpg: complete current camera frame with the applied country colour and no country boundary outlines. This JPEG is flattened onto #101720 and is ready to use as a single image.\n- country-at-camera-position.png: selected country alone, transparent outside its geometry, already placed inside the same full camera frame. Use this PNG when you need an independent layer.\n- placement.json: map identity, source fingerprint, camera frame and exact pixel/normalized bounds.\n\nIMPORT STEPS FOR LAYERED COMPOSITING\n1. Export the matching outline-free Camera Map SVG from the same map and editor camera session.\n2. Convert that SVG to PNG if your editor needs a raster base map. Preserve the SVG output width and height.\n3. Create a composition/canvas of ${result.w} × ${result.h} pixels.\n4. Import the base camera map and country-at-camera-position.png.\n5. Keep both layers centered at X=${result.w/2}, Y=${result.h/2}, scale 100%, rotation 0°.\n6. Do not crop, fit-to-screen, or independently resize only one layer.\n\nThe JPEG is a flattened full-camera composition (not transparent). The PNG is the transparent overlay for compositing. Both use the same exact camera frame. The JPEG shows applied fill ${appliedFill||'(map default fill)'}.\n\nAlignment only applies to the matching source map and camera settings. The source map does not necessarily provide geographic latitude/longitude.\n`;
     const zip=zipStoredFiles([
-      {name:`${safe(result.name)}-at-camera-position.png`,data:new Uint8Array(await png.arrayBuffer())},
+      {name:'camera-map-with-country-highlight.jpg',data:new Uint8Array(await jpeg.arrayBuffer())},
+      {name:'country-at-camera-position.png',data:new Uint8Array(await png.arrayBuffer())},
       {name:'placement.json',data:JSON.stringify(manifest,null,2)},
       {name:'IMPORT-INSTRUCTIONS.txt',data:instructions}
     ]);
     download(zip,`${safe(state.metadata?.name)}-${safe(result.name)}-positioned-country-package.zip`);
-    toast('Positioned country package downloaded: PNG + exact placement metadata.');
+    toast('Positioned country package downloaded: full-frame JPEG + transparent PNG + exact placement metadata.');
   }catch(error){toast(`Positioned country export failed: ${error.message}`)}
 }
 function downloadCameraViewSvg(){
   const result=buildCameraViewSvg();if(!result)return;
   const safe=(state.metadata?.name||'map').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'')||'map';
   const blob=new Blob([result.xml],{type:'image/svg+xml;charset=utf-8'});download(blob,`${safe}-${String($('viewSelect')?.value||'camera')}-camera-map-${result.w}x${result.h}.svg`);
-  toast(`Camera map SVG downloaded · ${result.w} × ${result.h} · selection removed.`);
+  toast(`Camera map SVG downloaded · ${result.w} × ${result.h} · outlines removed, applied fills retained.`);
 }
 $('countryCanvasPreset').addEventListener('change',e=>{if(e.target.value==='custom')return;const [w,h]=e.target.value.split('x').map(Number);$('countryExportWidth').value=w;$('countryExportHeight').value=h;updateCountryExportPreview()});
 ['countryExportWidth','countryExportHeight','countryExportTransparent'].forEach(id=>$(id).addEventListener('input',()=>{if(id!=='countryExportTransparent')$('countryCanvasPreset').value='custom';updateCountryExportPreview()}));

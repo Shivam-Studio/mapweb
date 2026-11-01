@@ -1,4 +1,4 @@
-# MapMotion Studio 0.8.2 — Vercel deployment-ready source
+# MapMotion Studio 0.8.3 — Vercel deployment-ready source
 
 MapMotion Studio is a browser-based SVG map editor for map-animation creators. It provides country/region selection, world and continent camera framing, map styling, optional physical-terrain SVG layers when supplied by a map, manual raster pairing, saved projects, and three animator-focused export actions.
 
@@ -16,9 +16,9 @@ The launcher creates `.venv`, installs `backend/requirements.txt`, and starts Fa
 
 ## The three animator exports
 
-1. **Camera Map SVG** — exports only the visible camera frame (world/continent/custom view, current pan/zoom and map style), without a selected-country highlight.
-2. **Country PNG** — exports one selected country as a tightly cropped transparent PNG.
-3. **Country + exact map position** — downloads a ZIP containing a full-camera-frame transparent PNG, `placement.json`, and import instructions. The positioned PNG uses the same pixel dimensions and camera viewBox as the Camera Map SVG, so it can be centered at 100% scale over the matching map.
+1. **Camera Map SVG** — exports the visible camera frame (world/continent/custom view, current pan/zoom and map style), retains any applied country fill colours, and removes all country-boundary outline strokes and selection glow.
+2. **Country PNG** — exports one selected country in its applied fill colour as a tightly cropped transparent PNG. If no custom colour is applied in Physical mode, its relief texture is used.
+3. **Country + exact map position** — downloads a ZIP containing a full-camera JPEG with the selected colour visible, a transparent full-camera-frame PNG of the selected country at its exact position, `placement.json`, and import instructions. The JPEG and PNG share identical pixel dimensions and camera viewBox. JPEG is flattened/opaque; use the PNG as the independent compositor layer.
 
 Export the camera map and positioned country from the same source map and unchanged camera session. The position metadata guarantees alignment in the matching SVG frame; it does not claim accurate latitude/longitude unless the input SVG is independently georeferenced.
 
@@ -75,3 +75,12 @@ The QA smoke test runs the FastAPI app with `VERCEL=1` and checks all nine bundl
 ## Licence
 
 No application licence has been added. Choose an appropriate licence before inviting public contributions or reuse.
+
+
+## 0.8.3 export changes
+
+- Applied country colours remain visible when selected and refresh all map/export previews.
+- Camera Map SVG keeps the camera view and applied fills but removes boundary strokes and selection glow.
+- Country PNG and positioned-country exports prioritise an applied fill over physical relief.
+- Positioned-country ZIP includes a flattened full-camera JPEG plus a transparent exact-position PNG and `placement.json`.
+- Run `node QA_EXPORT_COLOUR_TEST.js` for the export-colour regression check.

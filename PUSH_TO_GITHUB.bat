@@ -1,12 +1,12 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title MapMotion Studio - Safe Starter Map Release Push
+title MapMotion Studio - 0.8.3 Export Fix Push
 
 set "REMOTE_URL=https://github.com/Shivam-Studio/mapweb.git"
 
 echo ==============================================================
-echo   MAPMOTION STUDIO - SAFE 0.8.2 STARTER MAP PUSH
+echo   MAPMOTION STUDIO 0.8.3 - SAFE EXPORT FIX PUSH
 echo   Target: Shivam-Studio/mapweb ^(main^)
 echo ==============================================================
 echo.
@@ -64,14 +64,14 @@ for %%F in (app.py pyproject.toml requirements.txt backend\app.py frontend\index
 )
 
 echo.
-echo Staging updated source and the nine curated starter-map packs...
+echo Staging updated source, export fixes and the nine bundled starter maps...
 git add -A
 if errorlevel 1 goto :failed
 
 git diff --cached --quiet
 if errorlevel 1 (
-  echo Creating deployment fix commit...
-  git commit -m "Add nine curated starter maps for Vercel workspace"
+  echo Creating export and selection colour fix commit...
+  git commit -m "Fix selection colours and camera/country exports"
   if errorlevel 1 goto :failed
 ) else (
   echo No new local changes to commit.

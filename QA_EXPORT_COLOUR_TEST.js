@@ -1,0 +1,30 @@
+// Dependency-free regression checks for 0.8.3 export colour rules.
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync(__dirname + '/frontend/app.js', 'utf8');
+const css = fs.readFileSync(__dirname + '/frontend/styles.css', 'utf8');
+function assert(ok, message) { if (!ok) throw new Error(message); }
+const fn = source.match(/function resolveCountryAppearance\(feature\)\{[\s\S]*?\n\}/);
+assert(fn, 'resolveCountryAppearance must exist');
+const context = { state: { style: 'physical', showPhysicalLayer: true, physicalTextureData: 'data:image/png;base64,AA==' } };
+vm.createContext(context);
+vm.runInContext(fn[0] + '\nglobalThis.resolveCountryAppearance = resolveCountryAppearance;', context);
+const custom = context.resolveCountryAppearance({ dataset: { customfill: '#4dff00', customstroke: '#112233', basefill: '#99aabb' } });
+assert(custom.customFill === '#4dff00', 'Applied fill must be retained');
+assert(custom.physical === false, 'Applied fill must override the physical texture for isolated exports');
+assert(custom.fill === '#4dff00', 'Export fill must use applied fill');
+assert(custom.stroke === '#112233', 'Applied border colour must be retained');
+const relief = context.resolveCountryAppearance({ dataset: { basefill: 'none' } });
+assert(relief.physical === true && relief.fill === 'none', 'Physical texture must remain the default when no custom fill exists');
+context.state.style = 'political';
+const political = context.resolveCountryAppearance({ dataset: { customfill: '', basefill: '#aabbcc' } });
+assert(political.physical === false && political.fill === '#aabbcc', 'Political base fill should be retained');
+assert(source.includes("path.setAttribute('stroke','none')"), 'Camera SVG must remove outline strokes');
+assert(source.includes('camera-map-with-country-highlight.jpg'), 'Position package must include the camera JPEG');
+assert(source.includes('renderSvgToJpegBlob(cameraMap.svg'), 'JPEG must be rendered from the camera composition');
+const applyHandler = source.slice(source.indexOf("$('applyStyle').onclick="), source.indexOf('function resolveCountryAppearance'));
+assert(applyHandler.includes('updateSelection();applyView();'), 'Apply-to-selection must refresh the live map and camera view');
+assert(source.includes('function updateSelection(){') && source.includes('updateCountryExportPreview();scheduleCameraViewPreview()'), 'Selection updates must refresh the country and camera export previews');
+assert(!/\.map-canvas \.country\.selected\{[^}]*fill:[^}]*!important/.test(css), 'CSS must not overwrite applied fill on selected paths');
+assert(!/\.map-canvas\.physical \.country\{[^}]*fill:[^}]*!important/.test(css), 'Physical CSS must not force custom fills transparent');
+console.log('PASS: applied colour priority, physical relief fallback, outline-free camera SVG, JPEG+PNG positioned package, and preview refresh.');
