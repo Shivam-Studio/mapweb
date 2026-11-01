@@ -1,4 +1,4 @@
-# MapMotion Studio — Upload key setup (0.8.6)
+# MapMotion Studio — Upload key setup (0.8.8)
 
 The upload key must remain a Vercel Secret. Do **not** hard-code it into `frontend/app.js`, Python source, HTML, or a public GitHub repository. The repository `Shivam-Studio/mapweb` is public; a key in source would let anyone use the upload endpoint and consume or alter your GitHub LFS map storage.
 
@@ -14,7 +14,7 @@ If Windows cannot verify clipboard access, the helper stops before changing Verc
 
 ## Authentication recovery
 
-If the browser submits an old or incorrect key and receives HTTP 403, version 0.8.6 clears the in-memory key and prompts once more. Paste the current value copied by `SET_UPLOAD_KEY.bat`. The same retry logic is used for new-map upload, satellite upload, commit and alignment-verification requests.
+If the browser submits an old or incorrect key and receives HTTP 403, version 0.8.8 clears the in-memory key and prompts once more. Paste the current value copied by `SET_UPLOAD_KEY.bat`. The same retry logic is used for new-map upload, satellite upload, commit and alignment-verification requests.
 
 ## Why credentials are not embedded
 

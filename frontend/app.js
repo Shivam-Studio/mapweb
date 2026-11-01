@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const state = {maps:[], mapId:'', metadata:null, svgText:'', sourceSvg:null, paths:[], selected:new Set(), view:'world', style:'political', projectId:null, loadedSvgMapId:null, imageUrl:null, imageFile:null, physicalSvgData:null, physicalTextureData:null, alignment:{opacity:55,scale:100,x:0,y:0}, zoom:1,panX:0,panY:0,drag:null,selectionMode:'single',baseViewBox:null,customViewSource:null,isolated:false,showPhysicalLayer:true,showCountryLayer:true};
 const api = async (url, options={}) => { const r=await fetch(url,options); let d={}; try{d=await r.json()}catch{} if(!r.ok){const error=new Error(d.detail||`Request failed (${r.status})`);error.status=r.status;throw error;} return d; };
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
-function page(name, options={}){document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===`page-${name}`));document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.page===name));$('pageTitle').textContent=({dashboard:'Dashboard',library:'Map Library',editor:'Map Editor',pairing:'Image Pairing',projects:'Saved Projects'})[name]||'MapMotion Studio';if(options.load===false)return;if(name==='library')renderLibrary();if(name==='editor'&&(options.reload||state.loadedSvgMapId!==state.mapId||!$('liveMap')))loadEditor().catch(e=>toast(`Could not load editor: ${e.message}`));if(name==='pairing')renderPairing().catch(e=>toast(`Could not load pairing: ${e.message}`));if(name==='projects')loadProjects().catch(e=>toast(`Could not load projects: ${e.message}`));}
+function page(name, options={}){document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===`page-${name}`));document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.page===name));$('pageTitle').textContent=({dashboard:'Dashboard',library:'Map Library',editor:'Map Editor',pairing:'Image Pairing',autoplacer:'Global Position AutoPlacer',projects:'Saved Projects'})[name]||'MapMotion Studio';if(options.load===false)return;if(name==='library')renderLibrary();if(name==='editor'&&(options.reload||state.loadedSvgMapId!==state.mapId||!$('liveMap')))loadEditor().catch(e=>toast(`Could not load editor: ${e.message}`));if(name==='pairing')renderPairing().catch(e=>toast(`Could not load pairing: ${e.message}`));if(name==='autoplacer')initAutoPlacerPage().catch(e=>setApStatus(e.message,'error'));if(name==='projects')loadProjects();}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>page(b.dataset.page)));
 let isVercelPreview=false;
 let isGithubLfsStorage=false;
@@ -675,4 +675,274 @@ const dialog=$('uploadDialog');$('openUpload').onclick=()=>dialog.showModal();$(
 $('uploadForm').addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(e.target);try{if(isVercelPreview&&!isGithubLfsStorage)throw new Error('Map upload is disabled because GitHub Git LFS is not configured for this deployment.');const r=isGithubLfsStorage?await uploadNewMapToGithub(fd):await api('/api/maps',{method:'POST',body:fd});dialog.close();e.target.reset();state.mapId=r.map.id;await refreshMaps();toast(isGithubLfsStorage?'Map committed to GitHub Git LFS.':'Map uploaded to local library.');page('editor')}catch(err){toast(err.message)}});
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 $('startWorkflow').onclick=()=>page('library');$('newProject').onclick=$('newProject2').onclick=()=>{state.projectId=null;state.projectName=null;state.mapId=preferredMapId();page('library')};$('openUpload').addEventListener('click',()=>{});$('exportNav')?.addEventListener('click',()=>page('editor'));$('studioNav')?.addEventListener('click',()=>page('dashboard'));
+
+// ---------------- Global Position AutoPlacer (0.8.8) ----------------
+const AP_DATA_URLS = [
+  'https://raw.githubusercontent.com/wmgeolab/geoBoundaries/9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/IND/ADM1/geoBoundaries-IND-ADM1_simplified.geojson',
+  'https://cdn.jsdelivr.net/gh/wmgeolab/geoBoundaries@9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/IND/ADM1/geoBoundaries-IND-ADM1_simplified.geojson'
+];
+const AP_PRESETS = {
+  world: {west:-180,south:-85.05112878,east:180,north:85.05112878},
+  asia: {west:25,south:-15,east:180,north:82},
+  'south-asia': {west:55,south:-2,east:105,north:42},
+  india: {west:67,south:5,east:99,north:38},
+  'india-neighbours': {west:60,south:0,east:101,north:40}
+};
+let apFeatureCollection = null;
+let apFeatures = [];
+let apLoadPromise = null;
+let apUiBound = false;
+let apReferenceUrl = null;
+let apReferenceImageName = null;
+let apLastRender = null;
+
+function setApStatus(message, tone='') {
+  const el = $('apStatus');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle('success', tone === 'success');
+  el.classList.toggle('error', tone === 'error');
+}
+function apDataStatus(message, ok=false) {
+  const el = $('apDataStatus');
+  if (!el) return;
+  el.textContent = message;
+  el.style.borderColor = ok ? '#2e5548' : '';
+  el.style.color = ok ? '#8cdbb4' : '';
+}
+async function loadAutoPlacerGeometries() {
+  if (apFeatureCollection) return apFeatureCollection;
+  if (apLoadPromise) return apLoadPromise;
+  apLoadPromise = (async () => {
+    let lastError = null;
+    for (const url of AP_DATA_URLS) {
+      try {
+        const response = await fetch(url, {mode:'cors', cache:'force-cache'});
+        if (!response.ok) throw new Error(`Boundary dataset request failed (${response.status}).`);
+        const data = await response.json();
+        if (data.type !== 'FeatureCollection' || !Array.isArray(data.features) || !data.features.length) throw new Error('The India boundary dataset has an unexpected format.');
+        const normalizer = window.MapMotionAutoPlacer;
+        if (!normalizer) throw new Error('AutoPlacer geometry module did not load. Refresh this page.');
+        apFeatureCollection = data;
+        apFeatures = data.features.map((feature, index) => ({...normalizer.normalizeFeature(feature), feature, index})).filter(item => item.geometry && ['Polygon','MultiPolygon'].includes(item.geometry.type)).sort((a,b) => a.name.localeCompare(b.name));
+        if (!apFeatures.length) throw new Error('No state geometries were found in the dataset.');
+        return apFeatureCollection;
+      } catch (error) { lastError = error; }
+    }
+    throw new Error(`Could not load India state boundaries. Check your internet connection and reload. ${lastError?.message || ''}`.trim());
+  })();
+  try { return await apLoadPromise; } catch (error) { apLoadPromise = null; throw error; }
+}
+function apReadBounds() {
+  return {west:Number($('apWest').value),south:Number($('apSouth').value),east:Number($('apEast').value),north:Number($('apNorth').value)};
+}
+function apReadDimensions() {
+  const width = Math.round(Number($('apWidth').value)), height = Math.round(Number($('apHeight').value));
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 256 || height < 256 || width > 8192 || height > 8192) throw new Error('Canvas width and height must each be between 256 and 8192 pixels.');
+  if (width * height > 50_000_000) throw new Error('The canvas is too large for a safe browser export. Use dimensions up to 50 megapixels.');
+  return {width,height};
+}
+function apSetPresetBounds() {
+  const preset = $('apCropPreset').value;
+  if (preset === 'custom' || preset === 'calibrate') return;
+  const bounds = {...AP_PRESETS[preset]};
+  if ($('apProjection').value === 'EPSG:4326' && preset === 'world') { bounds.south = -90; bounds.north = 90; }
+  for (const [key,id] of Object.entries({west:'apWest',south:'apSouth',east:'apEast',north:'apNorth'})) $(id).value = bounds[key];
+}
+function apSetModeVisibility() {
+  const calibrated = $('apCropPreset').value === 'calibrate';
+  $('apCalibrationGroup').hidden = !calibrated;
+  $('apBoundsGroup').hidden = calibrated;
+  $('apMethodTag').textContent = calibrated ? '3-point affine calibration' : $('apProjection').value;
+  $('apRender').textContent = calibrated ? 'Update calibrated preview' : 'Update preview';
+}
+function apCalibrationPointsComplete() {
+  return [1,2,3].every(n => ['Lon','Lat','X','Y'].every(part => {
+    const value = $(`apGcp${n}${part}`)?.value?.trim();
+    return value !== '' && Number.isFinite(Number(value));
+  }));
+}
+function apShowCalibrationSetup(message='Upload the exact base-map crop, enter each point longitude/latitude, then click its matching location on the image.') {
+  const stage = $('apPreviewStage');
+  if (apReferenceUrl) {
+    stage.innerHTML = `<img class="ap-calibration-reference" src="${apReferenceUrl}" alt="Reference crop for geographic control-point calibration"><div class="ap-image-pick-hint">Click the selected control point on this image</div>`;
+  } else {
+    stage.innerHTML = '<div class="ap-empty">Upload the exact Alight Motion base-map crop to pick control points. You can also type pixel X/Y manually below.</div>';
+  }
+  $('apPreviewMeta').textContent = 'Calibration setup · no geographic overlay until all three control points are complete.';
+  $('apExport').disabled = true;
+  setApStatus(message);
+}
+function apGetProjector(width,height) {
+  const engine = window.MapMotionAutoPlacer;
+  const projection = $('apProjection').value;
+  if ($('apCropPreset').value === 'calibrate') {
+    if (!apCalibrationPointsComplete()) throw new Error('Complete longitude, latitude, image X and image Y for all three calibration points.');
+    const points = [1,2,3].map(n => ({
+      lon:Number($(`apGcp${n}Lon`).value), lat:Number($(`apGcp${n}Lat`).value),
+      x:Number($(`apGcp${n}X`).value), y:Number($(`apGcp${n}Y`).value)
+    }));
+    const projector = engine.affineProjector(points, projection);
+    return {projector, projection, method:'three-point-affine', bounds:null, controlPoints:points, coefficients:projector.coefficients};
+  }
+  const bounds = apReadBounds();
+  const projector = engine.geographicProjector(bounds,width,height,projection);
+  return {projector, projection, method:'geographic-bounds', bounds};
+}
+function apSafeText(s) { return String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function apSvgDocument(width,height,projector,selectedFeature,includeContext=false,backgroundHref=null) {
+  const selectedPath = window.MapMotionAutoPlacer.geometryToSvgPath(selectedFeature.geometry,projector);
+  if (!selectedPath) throw new Error('The selected state has no renderable polygon geometry.');
+  let context = '';
+  if (includeContext) {
+    context = apFeatures.filter(x => x !== selectedFeature).map(item => {
+      const d = window.MapMotionAutoPlacer.geometryToSvgPath(item.geometry,projector);
+      return d ? `<path d="${d}" fill="#233543" fill-opacity=".78" stroke="#7890a3" stroke-opacity=".65" stroke-width="1.1" vector-effect="non-scaling-stroke"/>` : '';
+    }).join('');
+  }
+  const background = backgroundHref ? `<image href="${backgroundHref}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none"/>` : '';
+  const fill = $('apStateColour')?.value || '#f0a64c';
+  const stroke = $('apOutlineColour')?.value || '#fff0d8';
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${background}<g fill-rule="evenodd">${context}<path d="${selectedPath}" fill="${fill}" stroke="${stroke}" stroke-width="1.4" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></g></svg>`;
+}
+function apSelectedFeature() {
+  const code = $('apStateSelect').value;
+  return apFeatures.find(item => item.code === code) || apFeatures.find(item => item.name === code) || null;
+}
+async function apRenderPreview() {
+  if (!apFeatures.length) await loadAutoPlacerGeometries();
+  const selected = apSelectedFeature();
+  if (!selected) throw new Error('Choose an India state or Union Territory first.');
+  const {width,height} = apReadDimensions();
+  if ($('apCropPreset').value === 'calibrate' && !apCalibrationPointsComplete()) {
+    apShowCalibrationSetup();
+    return;
+  }
+  const registration = apGetProjector(width,height);
+  const svg = apSvgDocument(width,height,registration.projector,selected,true,apReferenceUrl);
+  $('apPreviewStage').innerHTML = svg;
+  $('apPreviewMeta').textContent = `${selected.name}${selected.code ? ` · ${selected.code}` : ''} · ${width.toLocaleString()} × ${height.toLocaleString()} px · ${registration.method === 'geographic-bounds' ? `${registration.projection} · ${registration.bounds.west}, ${registration.bounds.south} → ${registration.bounds.east}, ${registration.bounds.north}` : 'Three-point affine registration'} · transparent state overlay`;
+  $('apExport').disabled = false;
+  $('apMethodTag').textContent = registration.method === 'geographic-bounds' ? registration.projection : '3-point affine';
+  apLastRender = {selected,width,height,...registration};
+  setApStatus(`Preview ready: ${selected.name} is positioned in the selected geographic crop.`, 'success');
+}
+function apBlobFromCanvas(canvas,type='image/png') {
+  return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('The browser could not encode the overlay image.')),type));
+}
+async function apSvgToPng(svgText,width,height) {
+  const svgBlob = new Blob([svgText],{type:'image/svg+xml;charset=utf-8'});
+  const objectUrl = URL.createObjectURL(svgBlob);
+  try {
+    const image = new Image();
+    await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(new Error('Could not render the selected state SVG.'));image.src=objectUrl;});
+    const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+    const context = canvas.getContext('2d'); if (!context) throw new Error('Browser canvas is unavailable.');
+    context.clearRect(0,0,width,height); context.drawImage(image,0,0,width,height);
+    return await apBlobFromCanvas(canvas);
+  } finally { URL.revokeObjectURL(objectUrl); }
+}
+async function apExportPackage() {
+  const selected = apSelectedFeature();
+  if (!selected) throw new Error('Choose a state before exporting.');
+  const {width,height} = apReadDimensions();
+  const registration = apGetProjector(width,height);
+  const svgText = apSvgDocument(width,height,registration.projector,selected,false,null);
+  const png = await apSvgToPng(svgText,width,height);
+  const slug = selected.name.normalize('NFKD').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase() || 'india-state';
+  const placement = {
+    format:'MapMotion Global Position AutoPlacer package', schemaVersion:1, createdAt:new Date().toISOString(),
+    state:{name:selected.name,code:selected.code || null,boundaryYearRepresented:selected.year || '2011'},
+    source:{provider:'geoBoundaries',dataset:'India ADM1',boundaryType:'State / Union Territory',boundaryYearRepresented:2011,license:'CC BY 2.5 India',licenseUrl:'https://creativecommons.org/licenses/by/2.5/in/',metadataUrl:'https://www.geoboundaries.org/api/current/gbOpen/IND/ADM1/',pinnedSource:'https://github.com/wmgeolab/geoBoundaries/tree/9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/IND/ADM1'},
+    canvas:{width,height,units:'pixels',overlay:'transparent PNG',file:`${slug}-at-crop-position.png`},
+    registration: registration.method === 'geographic-bounds'
+      ? {method:'geographic-bounds',projection:registration.projection,coordinateReference:registration.projection === 'EPSG:3857' ? 'WGS84 Web Mercator' : 'WGS84 longitude/latitude',bounds:registration.bounds,alignmentRequirement:'The base image must use the same projection and geographic bounds. Fit the full-canvas overlay exactly over the base image at the same dimensions.'}
+      : {method:'three-point-affine',projection:registration.projection,controlPoints:registration.controlPoints,affineCoefficients:registration.coefficients,alignmentRequirement:'The affine fit is exact at the three entered control points. It is an approximation between points; best for a local crop with limited projection curvature.'},
+    placement:{x:0,y:0,canvasWidth:width,canvasHeight:height,anchor:'center',position:{x:width/2,y:height/2},scalePercent:100,rotationDegrees:0,alignment:'Import the PNG above the matching reference map at identical canvas dimensions. Keep both layers centered, same scale and no additional crop.'}
+  };
+  const instructions = `MAPMOTION STUDIO — GLOBAL POSITION AUTOPLACER\n\nFiles:\n- ${slug}-at-crop-position.png: transparent state overlay on the full reference-crop canvas.\n- placement.json: crop registration, dimensions, state identity and import placement.\n\nALIGHT MOTION IMPORT\n1. Keep your reference crop/world-map image on the timeline.\n2. Import the transparent PNG as a layer above it.\n3. Set the composition and both images to ${width} × ${height} pixels.\n4. Keep the overlay centered at X=${width/2}, Y=${height/2}, scale 100%, rotation 0°.\n5. Do not crop, independently resize, or use Fit-to-screen on only one layer.\n\nREGISTRATION\n${registration.method === 'geographic-bounds' ? `This overlay uses ${registration.projection} and geographic bounds west=${registration.bounds.west}, south=${registration.bounds.south}, east=${registration.bounds.east}, north=${registration.bounds.north}. Your base image must use the same projection and exact geographic bounds.` : 'This overlay uses three-point affine calibration. The transform is anchored at the three entered control points and is an approximation away from those points.'}\n\nIf your base map has a different projection, different crop extent, or unknown margins, recalibrate it. Pixel-perfect placement is only guaranteed when the reference image registration is correct.\n\nBoundary data: geoBoundaries India ADM1, represented boundary year 2011, CC BY 2.5 India. Attribute geoBoundaries and the source contributors when redistributing.\n`;
+  const files = [
+    {name:`${slug}-at-crop-position.png`,data:new Uint8Array(await png.arrayBuffer())},
+    {name:'placement.json',data:JSON.stringify(placement,null,2)},
+    {name:'IMPORT-INSTRUCTIONS.txt',data:instructions}
+  ];
+  const zip = zipStoredFiles(files);
+  download(zip,`MapMotion_${slug}_Global_Position_${width}x${height}.zip`);
+  setApStatus(`Exported ${selected.name} at its registered position (${width} × ${height}).`, 'success');
+  toast('Global position package exported.');
+}
+function apPickCalibrationPoint(event) {
+  if ($('apCropPreset').value !== 'calibrate' || !apReferenceUrl) return;
+  const image = event.target.closest?.('.ap-calibration-reference') || $('apPreviewStage').querySelector('svg');
+  if (!image) return;
+  const n = Number($('apActiveGcp').value || 1);
+  const lon = $(`apGcp${n}Lon`).value.trim(), lat = $(`apGcp${n}Lat`).value.trim();
+  if (lon === '' || lat === '' || !Number.isFinite(Number(lon)) || !Number.isFinite(Number(lat))) {
+    setApStatus(`Enter longitude and latitude for control point ${n} before clicking the image.`, 'error');
+    return;
+  }
+  const rect = image.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const dimensions = apReadDimensions();
+  const x = Math.max(0, Math.min(dimensions.width, (event.clientX - rect.left) / rect.width * dimensions.width));
+  const y = Math.max(0, Math.min(dimensions.height, (event.clientY - rect.top) / rect.height * dimensions.height));
+  $(`apGcp${n}X`).value = x.toFixed(1);
+  $(`apGcp${n}Y`).value = y.toFixed(1);
+  const next = [1,2,3].find(k => !$(`apGcp${k}X`).value.trim() || !$(`apGcp${k}Y`).value.trim());
+  if (next) $('apActiveGcp').value = String(next);
+  if (apCalibrationPointsComplete()) {
+    apRenderPreview().catch(e=>setApStatus(e.message,'error'));
+  } else {
+    const remaining = [1,2,3].filter(k => !$(`apGcp${k}X`).value.trim() || !$(`apGcp${k}Y`).value.trim());
+    setApStatus(`Recorded point ${n} at X=${x.toFixed(1)}, Y=${y.toFixed(1)}. Select control point ${remaining[0]} and click its location.`, 'success');
+  }
+}
+
+async function initAutoPlacerPage() {
+  apSetModeVisibility();
+  if (!apUiBound) wireAutoPlacerUi();
+  try {
+    await loadAutoPlacerGeometries();
+    const select = $('apStateSelect');
+    if (!select.dataset.populated) {
+      select.innerHTML = '<option value="">Choose a state / UT…</option>' + apFeatures.map(item=>`<option value="${apSafeText(item.code || item.name)}">${apSafeText(item.name)}${item.code ? ` · ${apSafeText(item.code)}` : ''}</option>`).join('');
+      select.dataset.populated = '1';
+      const bihar = apFeatures.find(item => /bihar/i.test(item.name));
+      if (bihar) select.value = bihar.code || bihar.name;
+    }
+    apDataStatus(`${apFeatures.length} state / UT geometries loaded · geoBoundaries ADM1`, true);
+    await apRenderPreview();
+  } catch (error) {
+    apDataStatus('Boundary data unavailable');
+    setApStatus(error.message,'error');
+    throw error;
+  }
+}
+function wireAutoPlacerUi() {
+  apUiBound = true;
+  $('apCropPreset').addEventListener('change',()=>{apSetPresetBounds();apSetModeVisibility();if(apFeatures.length)apRenderPreview().catch(e=>setApStatus(e.message,'error'));});
+  $('apProjection').addEventListener('change',()=>{apSetPresetBounds();apSetModeVisibility();if(apFeatures.length)apRenderPreview().catch(e=>setApStatus(e.message,'error'));});
+  $('apStateSelect').addEventListener('change',()=>{if(apFeatures.length)apRenderPreview().catch(e=>setApStatus(e.message,'error'));});
+  $('apReferenceImage').addEventListener('change',async event=>{
+    const file = event.target.files?.[0]; if (!file) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) { setApStatus('Choose a PNG, JPG or WebP reference image.','error'); return; }
+    if (apReferenceUrl) URL.revokeObjectURL(apReferenceUrl);
+    apReferenceUrl = URL.createObjectURL(file); apReferenceImageName = file.name;
+    const image = new Image();
+    image.onload = async () => {
+      if (image.naturalWidth > 8192 || image.naturalHeight > 8192) { setApStatus('Reference image exceeds the 8192-pixel edge limit. Use a resized copy.','error'); return; }
+      $('apWidth').value = image.naturalWidth; $('apHeight').value = image.naturalHeight;
+      try { if (apFeatures.length) await apRenderPreview(); } catch(e) { setApStatus(e.message,'error'); }
+    };
+    image.onerror = () => setApStatus('Could not read the selected reference image.','error');
+    image.src = apReferenceUrl;
+  });
+  $('apRender').addEventListener('click',()=>apRenderPreview().catch(e=>setApStatus(e.message,'error')));
+  $('apPreviewStage').addEventListener('click',apPickCalibrationPoint);
+  $('apActiveGcp').addEventListener('change',()=>{if($('apCropPreset').value==='calibrate')setApStatus(`Click the reference image to place control point ${$('apActiveGcp').value}.`);});
+  $('apExport').addEventListener('click',async()=>{const button=$('apExport');button.disabled=true;button.textContent='Preparing ZIP…';try{await apExportPackage()}catch(e){setApStatus(e.message,'error');toast(`AutoPlacer export failed: ${e.message}`)}finally{button.disabled=false;button.textContent='Export positioned state ZIP';}});
+  ['apWest','apSouth','apEast','apNorth','apWidth','apHeight','apStateColour','apOutlineColour',...Array.from({length:3},(_,i)=>['apGcp'+(i+1)+'Lon','apGcp'+(i+1)+'Lat','apGcp'+(i+1)+'X','apGcp'+(i+1)+'Y']).flat()].forEach(id=>$(id).addEventListener('change',()=>{if(!apFeatures.length)return;if($('apCropPreset').value==='calibrate'&&!apCalibrationPointsComplete()){apShowCalibrationSetup();return;}apRenderPreview().catch(e=>setApStatus(e.message,'error'));}));
+}
+// ---------------- end Global Position AutoPlacer ----------------
+
 init();

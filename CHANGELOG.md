@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.8.8 — Interactive crop calibration
+
+- Added click-to-record image pixel coordinates for the three-point AutoPlacer calibration workflow.
+- Added incomplete-calibration state with reference-image preview, preventing premature export.
+- Added explicit control-point selection and automatic advance to the next unplaced point.
+- Separated South Asia and India-neighbours geographic crop presets.
+- Retained the shared geographic coordinate frame and full-canvas transparent state overlay export.
+
+
+## 0.8.8 — Global Position AutoPlacer
+
+- Added a dedicated Global Position AutoPlacer workspace for India states and Union Territories.
+- Added geographic crop presets for the World, Asia, South Asia, India, India + neighbours, and custom geographic bounds.
+- Added WGS84 Web Mercator (EPSG:3857) and equirectangular (EPSG:4326) coordinate frames.
+- Added three-point affine calibration for third-party cropped map images whose geographic extent is not already known.
+- Added optional reference-image preview and exact canvas-dimension matching.
+- Added transparent full-canvas state PNG export, `placement.json`, and Alight Motion import instructions in one ZIP.
+- Uses a pinned geoBoundaries India ADM1 dataset at runtime; source metadata identifies CC BY 2.5 India and boundary year 2011. The guide documents attribution and the limits of affine registration.
+- No changes to the existing map upload, GitHub LFS, camera export, or country export flows.
+
 ## 0.8.6 — Bundled India-view satellite and physical map
 
 - Added a new built-in **World Satellite Map — India View** starter asset using the supplied corrected 2048×2048 SVG with its embedded satellite raster and 257 editable country/territory paths.

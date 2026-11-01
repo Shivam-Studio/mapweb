@@ -1,6 +1,6 @@
-# MapMotion Studio 0.8.6 — QA report
+# MapMotion Studio 0.8.8 — QA report
 
-## 0.8.6 bundled India-view map verification
+## 0.8.8 bundled India-view map verification
 
 - The repository now contains ten starter map folders; `world-satellite-india-view` is registered from the read-only deployment asset directory.
 - The supplied corrected SVG is included byte-for-byte as `world-india.svg` (2048×2048 viewBox, 257 editable country/territory paths).
@@ -51,3 +51,12 @@ A local headless Chromium/Playwright integration test ran the actual 0.8.3 HTML,
 
 - The actual Vercel-hosted tab was inspected, but the connected Browser integration here exposes read-only page inspection, not interactive click/download control. The local Chromium integration test therefore does not claim to have tested the public Vercel domain or its current deployment. Deploy this 0.8.3 package before retesting the live URL.
 - Vercel preview uploads/project saves still use temporary `/tmp` storage. Persistent cloud database/object storage is not configured.
+
+
+## 0.8.8 interactive calibration verification
+
+- The calibration page can preview the uploaded reference crop before all control points are entered.
+- Clicking the preview records X/Y against the original reference image dimensions.
+- Three geographic control points enable the affine preview and full-frame transparent PNG package.
+- Incomplete calibration keeps export disabled.
+- The crop presets use distinct bounds for South Asia and India + neighbours.

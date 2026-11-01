@@ -1,4 +1,4 @@
-# Vercel deployment — MapMotion Studio 0.8.6
+# Vercel deployment — MapMotion Studio 0.8.8
 
 ## Deploy the complete application
 
@@ -88,7 +88,7 @@ Official references:
 
 ## Verify after deployment
 
-1. `/` renders MapMotion Studio 0.8.6 with ten bundled starter maps.
+1. `/` renders MapMotion Studio 0.8.8 with ten bundled starter maps.
 2. `/api/health` reports `map_storage_mode: "github-lfs"` and `github_lfs.configured: true`.
 3. `/api/maps` returns all ten bundled maps and any records in `storage/maps/user-uploads/catalog.json`.
 4. Upload a small test SVG and confirm GitHub receives a commit under `storage/maps/user-uploads/<map-id>/` plus an updated `catalog.json`.
@@ -102,6 +102,17 @@ The included automated QA uses mocked GitHub responses. It does not replace this
 
 The application includes ten starter maps: World Map — India View, World Satellite Map — India View, World Physical Map — India View, Asia, Europe, Africa, North America, South America, Oceania, and India & Neighbours. Boundary data attribution and licensing are documented in `storage/maps/ATTRIBUTION.md`.
 
-## 0.8.6 bundled map and export verification
+## 0.8.8 bundled map and export verification
 
 After deploy, apply a bright country fill and verify the same selected fill remains in the live editor, Camera Map SVG, Country PNG, and positioned-country ZIP. This release changes map storage only; the 0.8.3 selection/export fixes are retained.
+
+
+## 0.8.8 Global Position AutoPlacer verification
+
+1. Open **Global Position AutoPlacer** from the workspace navigation.
+2. Confirm the geoBoundaries India ADM1 dataset loads (36 state / UT boundary features; source metadata represents 2011 boundaries).
+3. Select a state, select a geographic crop preset and set the canvas to the exact dimensions of the base map used in Alight Motion.
+4. For a third-party image with unknown projection or crop bounds, use three well-separated control points and their source-image pixel coordinates.
+5. Export the ZIP and import the full-canvas transparent PNG above the matching base map without independently scaling or cropping either layer.
+
+Preset registration is exact only when the reference image shares the selected projection and exact geographic bounds. Three-point affine calibration is approximate between the control points, particularly on large or strongly curved projections. Existing supplied SVGs without a verified georeference are not assumed to have geographic bounds.

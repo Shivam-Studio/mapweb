@@ -1,12 +1,12 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title MapMotion Studio - 0.8.6 Bundled Map Push
+title MapMotion Studio - 0.8.8 Bundled Map Push
 
 set "REMOTE_URL=https://github.com/Shivam-Studio/mapweb.git"
 
 echo ==============================================================
-echo   MAPMOTION STUDIO 0.8.6 - BUNDLED MAP PUSH
+echo   MAPMOTION STUDIO 0.8.8 - BUNDLED MAP PUSH
 echo   Target: Shivam-Studio/mapweb ^(main^)
 echo ==============================================================
 echo.
@@ -70,7 +70,7 @@ if errorlevel 1 goto :failed
 
 git diff --cached --quiet
 if errorlevel 1 (
-  echo Creating MapMotion Studio 0.8.6 bundled-map commit...
+  echo Creating MapMotion Studio 0.8.8 bundled-map commit...
   git commit -m "Bundle India-view satellite and physical starter map"
   if errorlevel 1 goto :failed
 ) else (
