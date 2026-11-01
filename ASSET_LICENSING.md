@@ -1,12 +1,17 @@
 # Map asset licensing and attribution
 
-The public source repository contains the application code only. Development map packs are intentionally excluded because the source metadata does not establish public redistribution rights for all map and satellite imagery.
+## Bundled boundary maps
 
-Before adding a map pack to a public repository or hosted application:
+The nine starter maps in `storage/maps/` derive their editable country boundaries from the user-supplied `worldIndiaHigh(1).svg` asset, which is identified in the SVG as amCharts world geodata. amCharts states that free individual SVG maps may be used under CC BY 4.0 with attribution. The original “Map by amCharts” hyperlink is preserved in the SVGs and a visible source credit is shown in MapMotion Studio. See `storage/maps/ATTRIBUTION.md` and https://amcharts.com/svg-maps/download/.
 
-1. Verify the original boundary-data source and its redistribution licence.
-2. Verify the imagery provider's terms, required attribution and redistribution permissions separately from the boundary SVG.
-3. Record source, licence, attribution text and any usage restrictions in that map's `metadata.json`.
-4. Keep assets with unknown or non-redistributable terms outside the public repository.
+## Physical relief
 
-MapMotion Studio's upload workflow preserves user-provided SVG data locally; uploading a map into a local installation does not grant permission to redistribute it.
+The generated terrain textures are illustrative relief artwork for visualization only. They are not measured DEM/elevation data and are not satellite imagery.
+
+## Satellite imagery
+
+No satellite image is bundled in this release. Only upload satellite imagery that you own or are licensed to use, and retain its source attribution.
+
+## User uploads
+
+User uploads are ignored by Git by default. Do not commit customer/private map packs, paid third-party map files, or raw imagery unless you have explicit redistribution rights.

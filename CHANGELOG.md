@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.2 — Bundled starter map library
+
+- Added nine ready-to-use bundled starter maps: World Map — India View, World Physical Map — India View, Asia, Europe, Africa, North America, South America, Oceania, and India & Neighbours.
+- Added cropped physical-relief textures for regional starter maps, including a dateline-wrapped Oceania view.
+- Added visible map attribution and CC BY 4.0 licensing notes for amCharts boundary data.
+- Added default camera views for each starter map.
+- Kept satellite imagery out of the public bundle; physical relief is illustrative and not measured elevation data.
+- Updated QA to verify starter-map registration and bundled asset delivery in Vercel mode.
+
+# Changelog
+
 ## 0.8.1 — Vercel deployment compatibility
 
 - Added the explicit Vercel FastAPI entrypoint (`backend.app:app`) and root dependency manifest.

@@ -1,7 +1,9 @@
-# Map asset storage
+# Bundled MapMotion Studio starter maps
 
-This repository intentionally does not bundle development map packs or satellite imagery unless redistribution permissions have been confirmed for each asset.
+This folder contains 9 built-in map assets: World Map — India View, World Physical Map — India View, Asia, Europe, Africa, North America, South America, Oceania, and India & Neighbours.
 
-For local Windows use, upload an SVG you own or are licensed to use through **Map Library → Upload map**. User map assets are stored under this folder.
+The editable country-boundary data is based on the user-supplied amCharts world SVG and is provided under CC BY 4.0 with the required **Map by amCharts** credit. Region packs are adapted/cropped versions of this source. See `ATTRIBUTION.md` for source and license links.
 
-For Vercel preview deployments, runtime uploads are redirected to temporary `/tmp` storage. They are not durable. Configure persistent object storage before relying on hosted uploads.
+The physical-relief overlay is illustrative project-generated artwork, not measured elevation data. No satellite imagery is bundled.
+
+These starter assets are tracked in Git and are read-only deployment assets. User uploads remain in runtime storage and should not be committed.

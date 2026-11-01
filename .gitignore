@@ -17,4 +17,23 @@ instance/
 # Only upload and commit map packs when redistribution permissions are documented.
 storage/maps/*
 !storage/maps/README.md
+!storage/maps/ATTRIBUTION.md
+!storage/maps/world-india/
+!storage/maps/world-india/**
+!storage/maps/world-physical-india/
+!storage/maps/world-physical-india/**
+!storage/maps/asia/
+!storage/maps/asia/**
+!storage/maps/europe/
+!storage/maps/europe/**
+!storage/maps/africa/
+!storage/maps/africa/**
+!storage/maps/north-america/
+!storage/maps/north-america/**
+!storage/maps/south-america/
+!storage/maps/south-america/**
+!storage/maps/oceania/
+!storage/maps/oceania/**
+!storage/maps/india-neighbours/
+!storage/maps/india-neighbours/**
 storage/projects/

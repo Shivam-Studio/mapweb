@@ -21,7 +21,7 @@ jobs:
         run: node --check frontend/app.js
       - name: Compile Python backend and smoke test
         run: |
-          python -m py_compile backend/app.py
+          python -m py_compile app.py backend/app.py
           python -m py_compile qa_vercel_smoke.py
           python qa_vercel_smoke.py
       - name: Test camera frame math

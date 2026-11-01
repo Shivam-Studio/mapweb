@@ -1,55 +1,51 @@
-# Vercel deployment — MapMotion Studio 0.8.1
+# Vercel deployment — MapMotion Studio 0.8.2
 
-## Deploy the full application, not the frontend folder
+## Deploy the complete application
 
-MapMotion Studio is one FastAPI application that serves both the API and the browser interface. Do **not** deploy `frontend/` as a separate static Vercel project. The HTML loads `/assets/styles.css` and `/assets/app.js`, while those assets and the `/api/*` endpoints are served by `backend.app:app`.
+MapMotion Studio is one FastAPI application serving the browser workspace, API, and bundled map library. Do **not** set the Vercel Root Directory to `frontend/` or `backend/`.
 
 ### Required Vercel project settings
 
 - Git repository: `Shivam-Studio/mapweb`
 - Production branch: `main`
-- Root Directory: `./` (the repository root; not `frontend` or `backend`)
-- Framework preset: FastAPI / automatic FastAPI detection
-- Build command: leave empty / automatic
-- Output directory: leave empty
+- Root Directory: `./`
+- Framework preset: FastAPI
+- Build command: default / automatic
+- Output directory: empty
+- Install command: default / automatic
 
-The Vercel project seen during review was `mapweb-frontend-f3ei`, connected to `stephinhenry91-design/mapweb` at commit `48de3a3` (`Initial commit`). That is a separate frontend-only source and will not receive pushes made to `Shivam-Studio/mapweb`. Reconnect it to the repository above, or create a new Vercel project from that repository.
+The current deployment project is `mapweb-p412` (`https://mapweb-p412.vercel.app/`), imported from `Shivam-Studio/mapweb`. Confirm that each new deployment's source commit matches the latest `main` commit. The older frontend-only project `mapweb-frontend-f3ei` was connected to a different repository and should not be used for this release.
 
 ## Repository layout
 
 ```text
 mapweb/
-├── app.py                 # Root FastAPI entrypoint detected by Vercel
-├── pyproject.toml         # Python metadata and Vercel entrypoint
-├── requirements.txt       # Root runtime dependencies
-├── backend/
-│   ├── __init__.py
-│   ├── app.py              # API + serves index and /assets
-│   └── requirements.txt    # Windows launcher dependencies
-├── frontend/
-│   ├── index.html
-│   ├── app.js
-│   └── styles.css
-├── storage/maps/           # Optional, licensed bundled map packs
-└── run_windows.bat         # Local Windows launcher only
+├── app.py                 # Root FastAPI entrypoint
+├── pyproject.toml         # Python metadata + app:app entrypoint
+├── requirements.txt       # Runtime dependencies
+├── vercel.json            # Explicitly bundles storage/maps/**
+├── backend/               # API and static frontend serving
+├── frontend/              # HTML, CSS, JavaScript
+└── storage/maps/           # Nine read-only starter-map packs
 ```
 
-The root `app.py` re-exports `backend.app:app`. `pyproject.toml` also sets `entrypoint = "app:app"` as a deterministic explicit entrypoint.
+The root `app.py` re-exports `backend.app:app`. `pyproject.toml` sets `entrypoint = "app:app"`. `vercel.json` explicitly includes `storage/maps/**` in the function bundle so dynamic map-directory discovery can read the bundled SVGs and textures at runtime. Vercel documents a 500 MB uncompressed Python function bundle limit; the starter-map collection is about 21 MB before compression. <https://vercel.com/docs/functions/runtimes/python>
+
+## Starter map collection
+
+The application includes nine starter maps: World Map — India View, World Physical Map — India View, Asia, Europe, Africa, North America, South America, Oceania, and India & Neighbours. All are visible in Map Library on a clean deployment. The country-boundary SVG preserves the amCharts credit and is attributed under CC BY 4.0; see `storage/maps/ATTRIBUTION.md` and https://amcharts.com/svg-maps/download/. The physical relief layer is illustrative generated artwork, not measured elevation data. No satellite imagery is bundled.
 
 ## Verify after deployment
 
-1. `/` should render the MapMotion Studio UI.
-2. `/assets/app.js` and `/assets/styles.css` should return HTTP 200.
-3. `/api/health` should return JSON with `ok: true` and `runtime: "vercel"`.
-4. `/api/maps` should return the registered bundled map list (or `[]` when no licensed map packs are included).
-5. If the browser shows `API disconnected`, `Loading library…` forever, or `Loading vector geometry…`, check the project root and API runtime rather than styling the HTML.
+1. `/` renders MapMotion Studio 0.8.2.
+2. `/api/health` returns `ok: true`, version `0.8.2`, runtime `vercel`, and storage mode `ephemeral`.
+3. `/api/maps` returns the nine bundled maps.
+4. `/api/maps/world-india/asset/world-india.svg` returns the world SVG.
+5. `/api/maps/world-india/asset/physical.svg` returns the physical layer.
+6. `/api/maps/asia/asset/world-india.svg` and `/api/maps/oceania/asset/world-india.svg` return cropped regional SVGs.
 
-## Map packs and licensing
+## Storage limitation — preview mode
 
-The repository intentionally excludes map source files and satellite imagery where redistribution rights have not been confirmed. A clean deployment may therefore show an empty Map Library. Add only map packs you own or are licensed to redistribute, under `storage/maps/<map-id>/`, containing `metadata.json` and `world-india.svg`. Optional assets such as `physical.svg`, `physical-texture.png` and `thumbnail.png` may also be included. Do not commit paid or third-party map assets without permission to redistribute them publicly.
+Vercel's writable `/tmp` directory is temporary and is not shared durable storage. User-uploaded maps and SQLite projects may disappear across function restarts or be unavailable on another function instance. Production use requires persistent PostgreSQL and object storage, plus authentication/authorization and upload controls. No external credentials are bundled.
 
-## Storage limitations
-
-Vercel's writable `/tmp` directory is temporary and is not shared durable storage. This preview mode can demonstrate the app and API, but uploaded maps and SQLite projects may disappear across function restarts or different instances. Production use requires a persistent database and object storage, plus authentication/authorization and upload controls. No external credentials are bundled or invented.
-
-Vercel Functions also impose request/response payload limits. The hosted UI conservatively blocks uploads above 4 MB per request; larger files need direct object-storage uploads.
+The hosted UI conservatively blocks upload requests above 4 MB; Vercel Functions have a 4.5 MB request/response payload limit. Larger assets should use direct-to-object-storage uploads.

@@ -1,0 +1,30 @@
+{
+  "id": "south-america",
+  "name": "South America Map",
+  "category": "Continent Maps",
+  "map_type": "political",
+  "projection": "AmCharts Mercator source SVG coordinate frame (not independently georeferenced)",
+  "coverage": "South America",
+  "svg": "world-india.svg",
+  "satellite": null,
+  "thumbnail": "thumbnail.png",
+  "source": "Derived from user-supplied worldIndiaHigh(1).svg; amCharts world geodata",
+  "license": "CC BY 4.0",
+  "source_credit": "Map by amCharts",
+  "source_url": "https://www.amcharts.com/svg-maps/world/",
+  "pairing_status": "unpaired",
+  "path_count": 16,
+  "physical_svg": "physical.svg",
+  "physical_preview": "physical-texture.png",
+  "physical_style": "Illustrative generated shaded relief; not measured elevation data",
+  "physical_asset_status": "included",
+  "physical_texture_dimensions": "748x483",
+  "layers": [
+    "political-boundaries",
+    "illustrative-physical-relief"
+  ],
+  "recommended_view": "south-america",
+  "starter_asset": true,
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "source_changes": "Recolored/restyled and, for regional packs, cropped from the source world SVG; attribution retained in the app and source metadata."
+}

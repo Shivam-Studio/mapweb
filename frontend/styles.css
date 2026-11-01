@@ -157,3 +157,11 @@
 
 /* 0.8.1 — empty-library and Vercel preview states */
 .empty-library{padding:22px;min-width:0}.empty-library b,.empty-map-state b{display:block;color:var(--text);font-size:13px}.empty-library p,.empty-map-state span{display:block;color:var(--muted);font-size:11px;line-height:1.6;margin:7px 0 12px}.empty-map-state{min-height:240px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px;text-align:center}.empty-map-state span{max-width:420px}
+
+
+/* Bundled starter-map collection disclosure */
+.starter-map-note{display:flex;flex-direction:column;gap:5px;margin:14px 0 18px;padding:13px 15px;border:1px solid var(--line, #2a3846);border-radius:12px;background:rgba(32,49,64,.55);color:var(--text, #e7edf4)}
+.starter-map-note span{font-size:12px;color:var(--muted, #9aa8b6)}
+.starter-map-note small{font-size:11px;color:var(--muted, #9aa8b6);line-height:1.5}
+.starter-map-note a{color:var(--accent, #e9a84d);text-decoration:underline}
+.map-card .source-credit{display:block;margin-top:6px;font-size:10px;color:var(--muted, #9aa8b6)}

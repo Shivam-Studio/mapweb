@@ -1,12 +1,12 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title MapMotion Studio - Safe Vercel Fix Push
+title MapMotion Studio - Safe Starter Map Release Push
 
 set "REMOTE_URL=https://github.com/Shivam-Studio/mapweb.git"
 
 echo ==============================================================
-echo   MAPMOTION STUDIO - SAFE VERCEL DEPLOYMENT FIX PUSH
+echo   MAPMOTION STUDIO - SAFE 0.8.2 STARTER MAP PUSH
 echo   Target: Shivam-Studio/mapweb ^(main^)
 echo ==============================================================
 echo.
@@ -64,14 +64,14 @@ for %%F in (app.py pyproject.toml requirements.txt backend\app.py frontend\index
 )
 
 echo.
-echo Staging updated project files...
+echo Staging updated source and the nine curated starter-map packs...
 git add -A
 if errorlevel 1 goto :failed
 
 git diff --cached --quiet
 if errorlevel 1 (
   echo Creating deployment fix commit...
-  git commit -m "Fix Vercel FastAPI root deployment and frontend API states"
+  git commit -m "Add nine curated starter maps for Vercel workspace"
   if errorlevel 1 goto :failed
 ) else (
   echo No new local changes to commit.
@@ -101,7 +101,7 @@ echo   PUSH SUCCESSFUL
 echo   Repository: https://github.com/Shivam-Studio/mapweb
 echo ==============================================================
 echo.
-echo Vercel must use this repository with Root Directory set to ./ .
+echo Vercel project: mapweb-p412 - Root Directory: ./ - Preset: FastAPI
 echo The previously reviewed frontend-only Vercel project used a different repository.
 echo.
 pause

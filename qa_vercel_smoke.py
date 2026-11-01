@@ -48,6 +48,7 @@ def main() -> None:
     with TestClient(app) as client:
         page = client.get("/")
         check(page.status_code == 200 and "MapMotion Studio" in page.text, "Home page must load")
+        check("9 ready-to-edit maps" in page.text and "CC BY 4.0" in page.text, "Map Library must visibly advertise the starter maps and source license")
 
         js = client.get("/assets/app.js")
         css = client.get("/assets/styles.css")
@@ -59,14 +60,44 @@ def main() -> None:
         check(health.status_code == 200, "Health endpoint must return 200")
         health_data = health.json()
         check(health_data.get("ok") is True, "Health endpoint must report ok")
-        check(health_data.get("version") == "0.8.1", "Health endpoint must report 0.8.1")
+        check(health_data.get("version") == "0.8.2", "Health endpoint must report 0.8.2")
         check(health_data.get("storage_mode") == "ephemeral", "Vercel mode must clearly report ephemeral storage")
         check(health_data.get("persistent_storage_configured") is False, "Vercel preview must not claim persistence")
 
         initial_maps = client.get("/api/maps")
         check(initial_maps.status_code == 200, "Bundled map library endpoint must load")
-        bundled = next((item for item in initial_maps.json() if item["id"] == "qa-bundled-map"), None)
-        check(bundled is not None, "Read-only bundled map should be registered in Vercel mode")
+        all_maps = initial_maps.json()
+        bundled = next((item for item in all_maps if item["id"] == "qa-bundled-map"), None)
+        check(bundled is not None, "Read-only bundled fixture should be registered in Vercel mode")
+        expected_starters = {"world-india", "world-physical-india", "asia", "europe", "africa", "north-america", "south-america", "oceania", "india-neighbours"}
+        registered_starters = {item["id"] for item in all_maps} & expected_starters
+        check(registered_starters == expected_starters, f"All nine bundled starter maps must register; got {sorted(registered_starters)}")
+        by_id = {item["id"]: item for item in all_maps}
+        expected_categories = {
+            "world-india": "World Maps",
+            "world-physical-india": "World Maps",
+            "asia": "Continent Maps",
+            "europe": "Continent Maps",
+            "africa": "Continent Maps",
+            "north-america": "Continent Maps",
+            "south-america": "Continent Maps",
+            "oceania": "Continent Maps",
+            "india-neighbours": "Regional Maps",
+        }
+        for starter_id, category in expected_categories.items():
+            check(by_id[starter_id]["category"] == category, f"{starter_id} must use the visible Map Library filter category {category}")
+        for starter_id in sorted(expected_starters):
+            check(by_id[starter_id]["metadata"].get("starter_asset") is True, f"{starter_id} must be marked as a starter asset")
+            check(by_id[starter_id]["metadata"].get("source_credit") == "Map by amCharts", f"{starter_id} must include visible map attribution metadata")
+            check(by_id[starter_id]["metadata"].get("license_url") == "https://creativecommons.org/licenses/by/4.0/", f"{starter_id} must link to the CC BY 4.0 license")
+            map_svg = client.get(f"/api/maps/{starter_id}/asset/world-india.svg")
+            check(map_svg.status_code == 200 and b"<svg" in map_svg.content and b"<path" in map_svg.content, f"{starter_id} editable SVG must be served")
+            physical_svg = client.get(f"/api/maps/{starter_id}/asset/physical.svg")
+            check(physical_svg.status_code == 200 and b"data:image/png;base64," in physical_svg.content, f"{starter_id} physical relief SVG must be served")
+            texture_png = client.get(f"/api/maps/{starter_id}/asset/physical-texture.png")
+            check(texture_png.status_code == 200 and texture_png.content.startswith(b"\x89PNG"), f"{starter_id} physical texture PNG must be served")
+            thumbnail = client.get(f"/api/maps/{starter_id}/asset/thumbnail.png")
+            check(thumbnail.status_code == 200 and thumbnail.content.startswith(b"\x89PNG"), f"{starter_id} thumbnail must be served")
         bundled_asset = client.get("/api/maps/qa-bundled-map/asset/world-india.svg")
         check(bundled_asset.status_code == 200, "Bundled SVG must be readable from the deployment source")
         bundled_upload = client.post(
@@ -121,7 +152,7 @@ def main() -> None:
         )
         check(bad_svg.status_code == 400, "Unsafe active SVG content must be rejected")
 
-    print("PASS: Vercel-mode home page, static assets, health, bundled-map read/copy-on-write, SVG upload, asset fetch, satellite upload, pair verification, project CRUD and SVG safety.")
+    print("PASS: Vercel-mode home page, static assets, health, all nine starter-map registrations, SVG/physical/texture/thumbnail asset routes, bundled-map copy-on-write, SVG upload, satellite upload, pair verification, project CRUD and SVG safety.")
     print("PASS: SQLite and uploaded content are routed to the configured temporary data directory.")
     print("NOTE: This validates temporary preview storage only; it does not test durable cloud persistence.")
 
