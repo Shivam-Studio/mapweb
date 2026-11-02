@@ -55,6 +55,8 @@ assert.match(app,/api\.geographicProjector|geographicProjector/,'App must use th
 assert.match(app,/apExportPackage/,'App must export a positioned state package');
 assert.match(app,/function apPickCalibrationPoint/,'Unknown crops must support click-to-record image control points');
 assert.match(app,/apShowCalibrationSetup/,'Incomplete calibration must show its setup state without enabling export');
+assert.match(app,/A rendered state proves the boundary collection is available/,'Successful previews must clear stale boundary warnings');
+assert.match(app,/if \(apFeatures\.length\) \{\s*\/\/ Another concurrent\/retried request/,'A late failed request must not overwrite successfully loaded boundary data');
 
 // Click-to-record calibration points against the original reference-image pixel frame.
 const vm = require('node:vm');

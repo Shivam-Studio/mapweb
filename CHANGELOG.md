@@ -1,3 +1,10 @@
+## 0.8.9 hotfix — AutoPlacer status badge synchronization
+
+- Keep the AutoPlacer data badge in the loaded state whenever a state preview renders successfully.
+- Prevent an older failed boundary-load request from overwriting a newer successful load status.
+- Cache-bust the changed `frontend/app.js` asset so browsers fetch the hotfix.
+- No change to the India state geometry, geographic registration, or PNG/ZIP export logic.
+
 ## 0.8.9 — India state selection and export repair
 
 - Fixed India ADM1 loading: use a same-origin FastAPI boundary proxy backed by the Git LFS media endpoint; raw GitHub LFS pointer responses are rejected.

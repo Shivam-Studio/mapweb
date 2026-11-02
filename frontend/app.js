@@ -847,6 +847,10 @@ async function apRenderPreview() {
   $('apExport').disabled = false;
   $('apMethodTag').textContent = registration.method === 'geographic-bounds' ? registration.projection : '3-point affine';
   apLastRender = {selected,width,height,...registration};
+  // A rendered state proves the boundary collection is available. Refresh the
+  // badge here too, so a late failure from an earlier load attempt cannot leave
+  // the UI showing a stale 'Boundary data unavailable' warning.
+  apDataStatus(`${apFeatures.length} state / UT geometries loaded · geoBoundaries ADM1`, true);
   setApStatus(`Preview ready: ${selected.name} is positioned in the selected geographic crop.`, 'success');
 }
 function apBlobFromCanvas(canvas,type='image/png') {
@@ -936,8 +940,14 @@ async function initAutoPlacerPage() {
     await apRenderPreview();
   } catch (error) {
     const select = $('apStateSelect');
-    if (select && !select.dataset.populated) select.innerHTML = '<option value="">State boundaries unavailable — retry loading</option>';
-    apDataStatus('Boundary data unavailable');
+    if (apFeatures.length) {
+      // Another concurrent/retried request may have completed successfully
+      // after this older request failed. Never overwrite the loaded state.
+      apDataStatus(`${apFeatures.length} state / UT geometries loaded · geoBoundaries ADM1`, true);
+    } else {
+      if (select && !select.dataset.populated) select.innerHTML = '<option value="">State boundaries unavailable — retry loading</option>';
+      apDataStatus('Boundary data unavailable');
+    }
     setApStatus(error.message,'error');
     throw error;
   }
